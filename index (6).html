@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>THUNDER ROYALE CASINO</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4ecd8;--cd:#fffaf0;--tx:#2a1a10;--mu:#7b6b58;--gd:#8a5f00;--ac:#8b1a2b;--ok:#16794c;--ln:#dccba2;--fe:#15694a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0c0812;--cd:#181022;--tx:#f3e9d2;--mu:#a99bb5;--gd:#e6c15a;--ac:#e0475b;--ok:#4cd68f;--ln:#3a2d4d;--fe:#0f4a34}}
+:root[data-theme="dark"]{--bg:#0c0812;--cd:#181022;--tx:#f3e9d2;--mu:#a99bb5;--gd:#e6c15a;--ac:#e0475b;--ok:#4cd68f;--ln:#3a2d4d;--fe:#0f4a34}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;min-height:100vh}
+#app{max-width:480px;margin:0 auto;padding:14px 16px 40px}
+.hero{text-align:center;padding:18px 0 8px;user-select:none}
+h1{font:800 44px/1 Cinzel,Georgia,serif;margin:6px 0;letter-spacing:3px;color:var(--gd)}
+h2{font:700 20px Cinzel,Georgia,serif;margin:4px 0 10px;color:var(--gd)}
+.casino{font:600 20px Cinzel,serif;letter-spacing:12px;color:var(--ac)}
+.sub{font-size:11px;letter-spacing:2px;color:var(--mu);text-transform:uppercase;margin:4px 0}
+.mut{color:var(--mu);font-size:13px;margin:6px 0}
+.card{background:var(--cd);border:1px solid var(--ln);border-radius:16px;padding:14px;margin:12px 0}
+.c{text-align:center}.big{font:700 24px Cinzel,serif}.huge{font:800 64px Cinzel,serif;color:var(--gd)}
+.ok{color:var(--ok);font-weight:700}.new{color:var(--ac);font-weight:800;margin:6px}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px;margin:8px 0;font:700 16px system-ui;color:#2a1a00;background:linear-gradient(135deg,#f6dc8a,#c9981c);cursor:pointer}
+.btn.alt{background:transparent;color:var(--gd);border:1.5px solid var(--gd)}
+.btn:active{transform:scale(.98)}
+.lk{background:none;border:0;color:var(--mu);cursor:pointer;font-size:13px;padding:6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--ln);background:var(--bg);color:var(--tx);font-size:16px;margin:6px 0}
+.bar{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--mu)}
+.rw{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--ln)}
+.rw.me{background:color-mix(in srgb,var(--gd) 14%,transparent);border-radius:8px}
+.rk{width:30px;font-size:20px;text-align:center}.nm{flex:1;font-weight:700}.nm small{display:block;font-weight:400;color:var(--mu);font-size:11px}
+.rw b{font:800 22px Cinzel,serif;color:var(--gd)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gc{background:var(--cd);border:1px solid var(--ln);border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;color:var(--tx);font:600 12px Cinzel,serif}
+.gc span{display:block;font-size:34px}.gc small{display:block;color:var(--mu);font:12px system-ui;margin-top:4px}
+.felt{background:radial-gradient(circle,var(--fe),#06261b);border-radius:14px;padding:14px;color:#f3e9d2;text-align:center;min-height:240px}
+.felt .sub{color:#cdbf9c}.felt .mut{color:#cdbf9c}
+.wheel{width:110px;height:110px;border-radius:50%;margin:6px auto 12px;display:grid;place-items:center;font:800 42px Cinzel,serif;border:5px solid #d4af37;background:#222;color:#fff}
+.wheel.r{background:#b3182b}.wheel.b{background:#111}.wheel.g{background:#0d7a3e}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.opt{padding:10px 4px;border-radius:10px;border:1.5px solid #d4af37;background:transparent;color:#f3e9d2;font-size:14px;cursor:pointer}
+.opt small{display:block;font-size:11px;color:#d4af37}.opt.on{background:#d4af37;color:#2a1a00}.opt.on small{color:#2a1a00}
+.hid{display:none}
+.reels{display:flex;gap:8px;justify-content:center;margin:14px 0}
+.reel{width:84px;height:100px;background:#fff;border-radius:12px;display:grid;place-items:center;font-size:48px;border:3px solid #d4af37}
+.reel.hit{animation:pop .3s}
+@keyframes pop{50%{transform:scale(1.12)}}
+.dz{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.die{font-size:54px;letter-spacing:4px;color:#fff;min-height:72px}
+.dz .glow{text-shadow:0 0 18px #ffd34d;animation:pop .5s 2}
+.hand{display:flex;gap:6px;justify-content:center;margin:8px 0;flex-wrap:wrap}
+.cd{width:52px;height:74px;border-radius:8px;background:#fff;color:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 20px system-ui;box-shadow:0 2px 6px #0006;transition:transform .15s}
+.cd b{font-size:22px}.cd.red{color:#c4162a}.cd.sel{transform:translateY(-12px);outline:3px solid #ffd34d}
+.cd.back{background:repeating-linear-gradient(45deg,#8b1a2b,#8b1a2b 6px,#5e0f1c 6px,#5e0f1c 12px);color:#ffd34d}
+.bars{display:grid;gap:6px;margin-top:8px}.br{display:flex;align-items:center;gap:8px;font-size:12px}.br i{flex:1;height:8px;background:var(--ln);border-radius:4px;overflow:hidden}.br i u{display:block;height:100%;background:linear-gradient(90deg,#c9981c,#f6dc8a)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.bd{font-size:12px;padding:5px 9px;border-radius:20px;border:1px solid var(--ln);color:var(--mu)}.bd.on{border-color:var(--gd);color:var(--gd);font-weight:700}
+.foot{text-align:center;font-size:11px;color:var(--mu);margin-top:16px}
+.cf{position:fixed;top:-10px;width:9px;height:14px;z-index:99;pointer-events:none;animation:fall 1.8s ease-in forwards}
+@keyframes fall{to{transform:translate(var(--x),105vh) rotate(720deg);opacity:.2}}
+.shake{animation:shk .45s}@keyframes shk{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.ban{position:fixed;inset:0;display:grid;place-items:center;z-index:98;pointer-events:none;font:800 40px Cinzel,serif;color:#ffd34d;text-shadow:0 0 24px #ffb300,0 2px 0 #7a4b00;animation:ban 1.4s forwards}
+@keyframes ban{0%{transform:scale(.3);opacity:0}25%{transform:scale(1.15);opacity:1}80%{opacity:1}100%{transform:scale(1);opacity:0}}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:8px 0}.tb{padding:6px 10px;border-radius:16px;border:1px solid var(--ln);background:none;color:var(--mu);white-space:nowrap;cursor:pointer;font-size:12px}.tb.on{border-color:var(--gd);color:var(--gd);font-weight:700}
+/* SLOT UI */
+.smo{position:fixed;inset:0;z-index:90;background:radial-gradient(circle at 50% 20%,#3a0a1f,#0b0710 70%);display:flex;align-items:center;justify-content:center;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));overflow:auto;animation:fin .35s}
+.smo.fs{background:radial-gradient(circle at 50% 20%,#4b0a7a,#07041a 70%)}
+@keyframes fin{from{opacity:0;transform:scale(.94)}}
+.smc{width:100%;max-width:420px;text-align:center;color:#f3e9d2}
+.smb{font:800 20px Cinzel,serif;letter-spacing:3px;color:#ffd34d;text-shadow:0 0 14px #ffb300;margin-bottom:10px}
+.smo.fs .smb{color:#ff7bff;text-shadow:0 0 16px #d400ff;animation:pls 1s infinite}
+@keyframes pls{50%{transform:scale(1.06)}}
+.mach{padding:10px;border-radius:20px;background:linear-gradient(145deg,#ffe58a,#a8741a 45%,#ffe58a);box-shadow:0 0 30px #ffb30088,inset 0 0 8px #fff8}
+.smo.fs .mach{box-shadow:0 0 34px #d400ffaa,inset 0 0 8px #fff8}
+.reels2{display:flex;gap:8px;padding:10px;border-radius:14px;background:linear-gradient(#0a0610,#241030 50%,#0a0610)}
+.rl{flex:1;height:112px;display:grid;place-items:center;font-size:64px;border-radius:10px;background:linear-gradient(#fff,#efe3c5 50%,#fff);box-shadow:inset 0 0 14px #0007}
+.rl.spin{filter:blur(2.5px);animation:jit .09s infinite;box-shadow:inset 0 0 14px #0007,0 0 14px #ffd34d}
+@keyframes jit{50%{transform:translateY(5px)}}
+.rl.stop{animation:thk .35s}
+@keyframes thk{0%{transform:translateY(-14px)}60%{transform:translateY(4px)}}
+.rl.win{animation:wn .6s infinite alternate;box-shadow:0 0 22px #ffd34d,inset 0 0 14px #ffd34d88;z-index:1}
+@keyframes wn{to{transform:scale(1.1)}}
+.smi{min-height:26px;margin:10px 0 2px;font-weight:700;color:#ffe58a}
+.smt{font:800 26px Cinzel,serif;color:#fff;margin-bottom:8px}.smt b{color:#ffd34d}
+.pt{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:12px;font-size:12px}
+.pr{display:flex;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:8px;background:#ffffff14;border:1px solid #ffd34d44}.pr b{color:#ffd34d}
+.champPts{font:800 22px Cinzel,serif;color:var(--gd);white-space:nowrap}.pos{font-size:11px;color:var(--mu);font-weight:500}.ruleline{display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border-bottom:1px solid var(--ln);font-size:13px}.ruleline:last-child{border-bottom:0}.positive{color:var(--ok);font-weight:800}.negative{color:var(--ac);font-weight:800}.champTop{border:1px solid var(--gd);background:color-mix(in srgb,var(--gd) 10%,var(--cd));border-radius:14px;padding:13px;margin:12px 0;text-align:center}.champTop .name{font:800 22px Cinzel,serif;color:var(--gd)}.tinybtn{padding:7px 12px;border:1px solid var(--gd);border-radius:18px;background:transparent;color:var(--gd);font-weight:700;cursor:pointer;font-size:12px}
+</style></head><body><div id="app"></div>
+<script>
+const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
+const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
+const PIN='7777',$=s=>document.querySelector(s),A=$('#app');
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
+try{me=localStorage.getItem('trc_me')||''}catch(e){}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
+const total=p=>G.reduce((s,x)=>s+((p&&p.s&&p.s[x.id])||0),0);
+const played=p=>G.filter(x=>p&&p.s&&p.s[x.id]!=null).length;
+const title=t=>TT.find(x=>t>=x[0])[1];
+const sorted=()=>Object.values(P).filter(p=>p&&(p.dw||0)>0).sort((a,b)=>(b.dw||0)-(a.dw||0)||(a.t||0)-(b.t||0));
+const champSorted=()=>Object.values(P).filter(p=>p&&(p.cm||0)>0).sort((a,b)=>(Number(b.cp)||0)-(Number(a.cp)||0)||(Number(b.cw)||0)-(Number(a.cw)||0)||String(a.name||'').localeCompare(String(b.name||''),'ko'));
+const pointText=n=>(Number(n)>0?'+':'')+String(Number(n)||0);
+const lsLoad=()=>{try{return JSON.parse(localStorage.getItem('trc_players'))||{}}catch(e){return{}}};
+const lsSave=()=>{try{localStorage.setItem('trc_players',JSON.stringify(P))}catch(e){}};
+let ac;function bp(f=440,d=.08,t='sine'){if(!snd)return;try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),v=ac.createGain();o.type=t;o.frequency.value=f;v.gain.value=.05;o.connect(v);v.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+const fan=w=>{(w?[523,659,784,1047]:[330,262]).forEach((f,i)=>setTimeout(()=>bp(f,.18,'triangle'),i*130))};
+const go=v=>{view=v;render()};
+function render(){if(!me&&!['menu','loc','tv','champ'].includes(view))view='menu';({menu:vMenu,sel:vSel,game:vGame,res:vRes,fin:vFin,rank:vRank,prof:vProf,adm:vAdm,duel:vDuel,loc:vLoc,tv:vTv,champ:vChamp})[view]()}
+const bar=()=>{const p=P[pid(me)];return `<div class=bar><button class=lk onclick="go('menu')">← MENU</button><span>${esc(me)} · ${dtitle((p&&p.dw)||0)}</span></div>`};
+function board(n){const sc=p=>p.dw||0,l=sorted().slice(0,n);return `<div class=card><div class=sub>ROYAL LEADERBOARD</div>`+(l.length?l.map((p,i)=>`<div class="rw${p.name==me?' me':''}"><span class=rk>${['🥇','🥈','🥉'][i]||i+1}</span><span class=nm>${esc(p.name)}${i==0?' 🏆':''}<small>⚔️ 대결 승리</small></span><b>${sc(p)}</b></div>`).join(''):'<div class=mut>아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!</div>')+'</div>'}
+function champBoard(n){const l=champSorted().slice(0,n);return `<div class=card><div class=sub>ROYAL CHAMPIONSHIP · SEASON ${M.n}</div>`+(l.length?l.map((p,i)=>`<div class="rw${p.name==me?' me':''}"><span class=rk>${['🥇','🥈','🥉'][i]||i+1}</span><span class=nm>${esc(p.name)}${i==0?' 🏆':''}<small>${p.cw||0}승 · ${p.cd||0}무 · ${p.cl||0}패</small></span><b class=champPts>${pointText(p.cp)}점</b></div>`).join(''):'<div class=mut>아직 대회 기록이 없어요. LOCAL DUEL에서 첫 경기를 시작해 보세요!</div>')+`<button class=lk onclick="go('champ')">전체 대회 랭킹 보기 →</button></div>`}
+function vMenu(){const p=P[pid(me)],t=total(p);
+A.innerHTML=`<div class=hero onclick="tap()"><div class=sub>THE HOUSE OF FORTUNE</div><h1>THUNDER<br>ROYALE</h1><div class=casino>CASINO</div><div class=mut>운을 시험하고, 기록을 세우고, 왕좌를 차지하라</div></div>`+
+(me?`<div class=card><div class=sub>WELCOME</div><div class=big>${esc(me)}</div><div class=mut>${dtitle((p&&p.dw)||0)} · ⚔️ 대결 ${(p&&p.dw)||0}승</div></div><button class=btn onclick="go('duel')">⚔️ 2인 대결 시작</button><div class=two><button class="btn alt" onclick="go('rank')">랭킹</button><button class="btn alt" onclick="go('prof')">내 프로필</button></div><button class=lk onclick="renameUI()">✏️ 닉네임 바꾸기</button><button class=lk onclick="logout()">다른 닉네임으로 입장</button>`
+:`<div class=card><div class=sub>PLAYER NAME</div><input id=nn maxlength=10 placeholder="닉네임 입력" onkeydown="if(event.key=='Enter')login()"><button class=btn onclick="login()">ENTER THE CASINO</button></div>`)+champBoard(5)+
+`<div class=two><button class="btn alt" onclick="LD=null;go('loc')">👥 LOCAL DUEL</button><button class="btn alt" onclick="go('champ')">🏆 ROYAL CHAMPIONSHIP</button></div><button class=lk onclick="go('tv')">📺 전광판</button><div class=foot>${db?'🟢 온라인 실시간 랭킹':'🟡 이 기기 랭킹'} · <button class=lk onclick="sndT(this)">${snd?'🔊':'🔇'}</button><button class=lk onclick="bgToggle()">🎵 BGM ${bgOn?'ON':'OFF'}</button><br>게임 속 가상 점수일 뿐, 현금 거래는 없어요.</div>`}
+function tap(){taps++;setTimeout(()=>taps=0,3000);if(taps>=5){taps=0;au=0;cf=0;view='adm';render()}}
+function login(){const v=$('#nn').value.trim();if(!v)return;me=v;try{localStorage.setItem('trc_me',v)}catch(e){}render()}
+function logout(){me='';try{localStorage.removeItem('trc_me')}catch(e){}render()}
+function startTour(){mode='tour';tour={i:0,r:{}};gid=G[0].id;go('game')}
+function startFree(id){mode=pr?'prac':'free';gid=id;go('game')}
+function vSel(){const p=P[pid(me)];A.innerHTML=bar()+`<h2>${pr?'🎈 PRACTICE':'CHOOSE YOUR GAME'}</h2><div class=grid>${G.map(x=>`<button class=gc onclick="startFree('${x.id}')"><span>${x.ic}</span>${x.n}<small>최고 ${p&&p.s&&p.s[x.id]!=null?p.s[x.id]:'—'}점</small></button>`).join('')}</div>`}
+function vGame(){const x=G.find(a=>a.id==gid);A.innerHTML=bar()+`<div class=card><div class=sub>${mode=='tour'?'TOURNAMENT '+(tour.i+1)+'/6':mode=='prac'?'PRACTICE · 기록 안 됨':'FREE PLAY'}</div><h2>${x.ic} ${x.n}</h2><div class=felt id=S></div></div>`;GM[gid]()}
+async function save(sc,win){const id=pid(me);let p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};p={...p,s:{...p.s}};const old=total(p);
+p.s[gid]=Math.max(p.s[gid]||0,sc);p.plays++;p.pts+=sc;if(win)p.wins++;if(total(p)>old||!p.t)p.t=Date.now();P[id]=p;
+if(db){try{await db.collection('players').doc(id).set(p)}catch(e){lsSave()}}else lsSave()}
+async function finish(sc,win,msg){const p=P[pid(me)],prev=p&&p.s?p.s[gid]:undefined;fan(win);fx(sc,win);if(mode!='prac')await save(sc,win);
+g.res={sc,win,msg,best:Math.max(prev||0,sc),isNew:prev==null||sc>prev};if(mode=='tour')tour.r[gid]=sc;setTimeout(()=>go('res'),1400)}
+function vRes(){const r=g.res,x=G.find(a=>a.id==gid);A.innerHTML=bar()+`<div class="card c"><div class=sub>${x.n}</div><div class=huge>+${r.sc}</div><div class="${r.win?'ok':'mut'}">${r.msg}</div>${mode=='prac'?'<div class=mut>🎈 연습 모드 — 기록에 반영되지 않아요</div>':r.isNew&&r.sc>0?'<div class=new>✨ NEW BEST!</div>':''}<div class=mut>이 게임 최고 ${r.best}점</div></div>`+
+(mode=='tour'?`<button class=btn onclick="nextG()">${tour.i==5?'최종 결과 보기':'다음 게임 →'}</button>`:`<button class=btn onclick="go('game')">다시 하기</button><button class="btn alt" onclick="go('sel')">게임 선택</button><button class="btn alt" onclick="go('rank')">랭킹 보기</button>`)}
+function nextG(){tour.i++;if(tour.i>5)return go('fin');gid=G[tour.i].id;go('game')}
+function vFin(){const s=G.reduce((a,x)=>a+(tour.r[x.id]||0),0),p=P[pid(me)];A.innerHTML=bar()+`<div class="card c"><div class=sub>TOURNAMENT COMPLETE</div><div class=huge>${s}</div><div class=mut>/ 600점 · 랭킹 총점 ${total(p)} · ${title(total(p))}</div>${G.map(x=>`<div class=rw><span class=rk>${x.ic}</span><span class=nm>${x.n}</span><b>${tour.r[x.id]||0}</b></div>`).join('')}</div><button class=btn onclick="go('rank')">랭킹 보기</button><button class="btn alt" onclick="startTour()">토너먼트 다시 도전</button>`}
+function vRank(){const l=sorted(),i=l.findIndex(p=>p.name==me);A.innerHTML=bar()+`<h2>RANKING · SEASON ${M.n}</h2>`+board(10,rkf)+(i>9?`<div class=mut>내 순위: ${i+1}위 (${l[i].dw}승)</div>`:'')+(l[0]?`<div class="card c">🏆 SEASON ${M.n} 1위 <b>${esc(l[0].name)}</b></div>`:'')+hof()}
+function vChamp(){const all=champSorted(),l=all.slice(0,champMore?30:10),lead=all[0],mine=me?all.findIndex(p=>p.name==me):-1;A.innerHTML=`<div class=bar><button class=lk onclick="go('menu')">← MENU</button><span>🏆 SEASON ${M.n}</span></div><h2>ROYAL CHAMPIONSHIP</h2><div class=mut>부스 참가자 전체 통합 랭킹 · 승리 +3점 / 무승부 0점 / 패배 -3점</div>`+(lead?`<div class=champTop><div class=sub>SEASON ${M.n} CURRENT LEADER</div><div class=name>👑 ${esc(lead.name)}</div><div class=champPts>${pointText(lead.cp)}점</div><div class=mut>${lead.cw||0}승 · ${lead.cd||0}무 · ${lead.cl||0}패 · ${lead.cm||0}경기</div></div>`:`<div class=card c><div class=big>아직 참가자가 없어요</div><div class=mut>LOCAL DUEL에서 경기를 진행하면 모든 참가자의 점수가 여기에 합산돼요.</div><button class=btn onclick="LD=null;go('loc')">LOCAL DUEL 시작</button></div>`)+`<div class=card><div class=sub>SEASON RANKING · ${all.length} PLAYERS</div>`+(l.length?l.map((p,i)=>`<div class="rw${p.name==me?' me':''}"><span class=rk>${['🥇','🥈','🥉'][i]||i+1}</span><span class=nm>${esc(p.name)}${i==0?' 🏆':''}<small>${p.cw||0}승 · ${p.cd||0}무 · ${p.cl||0}패 · ${p.cm||0}경기</small></span><b class=champPts>${pointText(p.cp)}점</b></div>`).join(''):'<div class=mut>기록 없음</div>')+(all.length>10?`<button class=tinybtn onclick="champMore=${champMore?0:1};vChamp()">${champMore?'TOP 10만 보기':'TOP 30까지 보기'}</button>`:'')+(mine>=0?`<div class=mut>내 순위: ${mine+1}위 · ${pointText(all[mine].cp)}점</div>`:'')+`</div>`+hof()+`<div class=card><div class=sub>RECENT MATCHES</div>`+((M.history||[]).slice(-8).reverse().map(h=>`<div class=rw><span class=rk>${h.result== -1?'➖':'⚔️'}</span><span class=nm>${esc(h.p1)} vs ${esc(h.p2)}<small>${h.result== -1?'무승부':esc(h.winner)+' 승리'} · ${new Date(h.time).toLocaleDateString('ko-KR')}</small></span><b>${h.result== -1?'0 : 0':(h.result==0?'+3 : -3':'-3 : +3')}</b></div>`).join('')||'<div class=mut>아직 경기 기록이 없어요.</div>')+`</div><button class=btn onclick="LD=null;go('loc')">👥 LOCAL DUEL 플레이</button>`}
+function vProf(){const p=P[pid(me)]||{s:{}},t=total(p),l=sorted(),top=l[0]&&l[0].name==me;
+const AC=[['🎓 ALL-ROUNDER',played(p)==6],['⚡ 5 STREAK',p.s.hl==100],['7️⃣ JACKPOT',p.s.slot==100],['🂡 NATURAL',p.s.bj==100],['👑 ROYAL FLUSH',p.s.poker==100],['🎯 LUCKY NUMBER',p.s.roulette==100],['🏆 THUNDER GOD',t==600]];
+A.innerHTML=bar()+`<div class="card c"><div class=sub>MY PROFILE</div><div class=big>${esc(me)} ${top?'🏆':''}</div><div class=ok>${title(t)}</div><div class=mut>🏆 트로피 ${(M.hof||[]).filter(h=>h.name==me).length} · ⚔️ 대결 ${p.dw||0}승</div><div class=mut>총점 ${t}/600 · 플레이 ${p.plays||0}회 · 승리 ${p.wins||0}회 · 🪙 ${1000+(p.pts||0)}</div></div><div class=card><div class=sub>BEST SCORES</div><div class=bars>${G.map(x=>`<div class=br><span style="width:120px">${x.ic} ${x.n}</span><i><u style="width:${p.s[x.id]||0}%"></u></i><b>${p.s[x.id]||0}</b></div>`).join('')}</div></div><div class=card><div class=sub>ACHIEVEMENTS</div><div class=badges>${AC.map(a=>`<span class="bd${a[1]?' on':''}">${a[0]}</span>`).join('')}</div></div>`}
+function vAdm(){const e=Object.entries(P);A.innerHTML=bar()+(au?`<div class=card><div class=sub>ADMIN</div>${e.map(([k,p])=>`<div class=rw><span class=nm>${esc(p.name)}<small>${total(p)}점</small></span><button class=lk onclick="admDel('${k}')">삭제</button></div>`).join('')||'<div class=mut>기록 없음</div>'}</div><button class=btn onclick="newSeason()">🏆 시즌 ${M.n} 종료 · 새 시즌 시작</button><button class="btn alt" id=rs onclick="admAll()">전체 기록 초기화</button>`:`<div class=card><div class=sub>ADMIN PIN</div><input id=pin type=password inputmode=numeric maxlength=8><button class=btn onclick="if($('#pin').value==PIN){au=1;render()}">확인</button></div>`)}
+async function admDel(k){delete P[k];if(db){try{await db.collection('players').doc(k).delete()}catch(e){}}else lsSave();render()}
+async function admAll(){if(!cf){cf=1;$('#rs').textContent='한 번 더 누르면 모든 기록이 삭제됩니다';return}for(const k of Object.keys(P))await admDel(k);cf=0}
+/* ---- cards ---- */
+const SU='♠♥♦♣',L=r=>({11:'J',12:'Q',13:'K',14:'A'}[r]||r);
+function deck(){const d=[];for(let s=0;s<4;s++)for(let r=2;r<=14;r++)d.push({r,s});for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d}
+const cd=(c,h,sel,i)=>h?'<span class="cd back">✦</span>':`<span class="cd${c.s==1||c.s==2?' red':''}${sel?' sel':''}"${i!=null?` onclick="pt(${i})"`:''}>${L(c.r)}<b>${SU[c.s]}</b></span>`;
+const GM={};
+/* ---- roulette ---- */
+const RED=[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36],col=v=>v==0?'g':RED.includes(v)?'r':'b';
+GM.roulette=()=>{g={b:null,busy:0};$('#S').innerHTML=`<div class=wheel id=wh>?</div><div class=opts>${[['red','🔴 빨강'],['black','⚫ 검정'],['odd','홀수'],['even','짝수']].map(([k,l])=>`<button class=opt data-k=${k} onclick="rb('${k}')">${l}<small>50점</small></button>`).join('')}<button class=opt data-k=num onclick="rb('num')">숫자<small>100점</small></button></div><input id=rn type=number min=0 max=36 placeholder="숫자 0–36" class=hid><button class=btn onclick="rSpin()">SPIN</button><p id=m class=mut>베팅을 선택하세요 (0은 초록: 색·홀짝 제외)</p>`};
+function rb(k){if(g.busy)return;g.b=k;document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on',o.dataset.k==k));$('#rn').classList.toggle('hid',k!='num')}
+function rSpin(){if(g.busy)return;const k=g.b;let n=null;if(!k){$('#m').textContent='먼저 베팅을 선택하세요';return}
+if(k=='num'){n=parseInt($('#rn').value);if(!(n>=0&&n<=36)){$('#m').textContent='0–36 사이 숫자를 입력하세요';return}}
+g.busy=1;const r=Math.floor(Math.random()*37);let i=0;
+const step=()=>{const v=i<22?Math.floor(Math.random()*37):r,w=$('#wh');w.textContent=v;w.className='wheel '+col(v);bp(300+i*18,.04);
+if(i++<22)setTimeout(step,45+i*i*.6);else{const c=col(r),win=k=='red'?c=='r':k=='black'?c=='b':k=='odd'?r>0&&r%2==1:k=='even'?r>0&&r%2==0:r==n;
+finish(win?(k=='num'?100:50):0,win,win?`${r} 적중! 🎉`:`결과는 ${r} — 다음 기회에!`)}};step()}
+/* ---- slot ---- */
+const SY=['7️⃣','💎','👑','🔔','⭐'];
+GM.slot=()=>{g={busy:0};$('#S').innerHTML=`<div class=reels><div class=reel id=r0>❔</div><div class=reel id=r1>❔</div><div class=reel id=r2>❔</div></div><button class=btn onclick="sSpin()">PULL THE LEVER</button><p class=mut>777=100 · 👑=90 · 💎=85 · 같은 그림 2개=50</p>`};
+function sSpin(){if(g.busy)return;g.busy=1;const f=[0,1,2].map(()=>Math.floor(Math.random()*5)),st=[0,0,0];
+const t=setInterval(()=>{for(let i=0;i<3;i++)if(!st[i])$('#r'+i).textContent=SY[Math.floor(Math.random()*5)];bp(500+Math.random()*200,.03,'square')},80);
+[900,1500,2100].forEach((d,i)=>setTimeout(()=>{st[i]=1;const e=$('#r'+i);e.textContent=SY[f[i]];e.classList.add('hit');bp(700+i*100,.1);
+if(i==2){clearInterval(t);const s=new Set(f).size;let sc=20,m='모두 다른 그림';if(s==1){sc=[100,85,90,75,75][f[0]];m=f[0]==0?'JACKPOT 777! 🎰':'같은 그림 3개!'}else if(s==2){sc=50;m='같은 그림 2개!'}finish(sc,sc>=50,m)}},d))}
+/* ---- dice ---- */
+const DF='⚀⚁⚂⚃⚄⚅',rd=()=>1+Math.floor(Math.random()*6);
+GM.dice=()=>{g={busy:0};$('#S').innerHTML=`<div class=dz><div><div class=sub>YOU</div><div class=die id=dy>🎲🎲</div></div><div><div class=sub>HOUSE</div><div class=die id=dh>🎲🎲</div></div></div><button class=btn onclick="dRoll()">ROLL</button><p class=mut id=m>승리 80 · 더블 승리 100 · 무승부 50</p>`};
+function dRoll(){if(g.busy)return;g.busy=1;let i=0;const y=[rd(),rd()],h=[rd(),rd()];
+const t=setInterval(()=>{const f=i<12;$('#dy').textContent=(f?DF[rd()-1]+DF[rd()-1]:DF[y[0]-1]+DF[y[1]-1]);$('#dh').textContent=(f?DF[rd()-1]+DF[rd()-1]:DF[h[0]-1]+DF[h[1]-1]);bp(200+i*30,.04,'square');
+if(i++>=12){clearInterval(t);const a=y[0]+y[1],b=h[0]+h[1],dbl=y[0]==y[1];$('#m').textContent=`${a} vs ${b}`;
+if(a>b){if(dbl)$('#dy').classList.add('glow');finish(dbl?100:80,1,dbl?'✨ DOUBLE VICTORY!':'승리!')}else if(a==b)finish(50,0,'무승부');else finish(20,0,'하우스 승리')}},90)}
+/* ---- blackjack ---- */
+const bv=h=>{let s=0,a=0;h.forEach(c=>{if(c.r==14){s+=11;a++}else s+=c.r>10?10:c.r});while(s>21&&a){s-=10;a--}return s};
+GM.bj=()=>{g={d:deck(),p:[],h:[]};g.p.push(g.d.pop(),g.d.pop());g.h.push(g.d.pop(),g.d.pop());
+if(bv(g.p)==21){bjD(1);const hb=bv(g.h)==21;finish(hb?50:100,!hb,hb?'양쪽 블랙잭 — 무승부':'BLACKJACK! 🎉')}else bjD()};
+function bjD(o){$('#S').innerHTML=`<div class=sub>DEALER ${o?bv(g.h):'?'}</div><div class=hand>${g.h.map((c,i)=>cd(c,!o&&i==1)).join('')}</div><div class=sub>YOU ${bv(g.p)}</div><div class=hand>${g.p.map(c=>cd(c)).join('')}</div>${o?'':'<div class=two><button class=btn onclick="bjHit()">HIT</button><button class="btn alt" style="color:#f6dc8a;border-color:#f6dc8a" onclick="bjStand()">STAND</button></div>'}`}
+function bjHit(){g.p.push(g.d.pop());bp(520,.06);if(bv(g.p)>21){bjD(1);finish(20,0,'BUST! 21 초과')}else bjD()}
+function bjStand(){while(bv(g.h)<17)g.h.push(g.d.pop());bjD(1);const p=bv(g.p),h=bv(g.h);
+if(h>21||p>h)finish(80,1,h>21?'딜러 버스트! 승리':'승리!');else if(p==h)finish(50,0,'무승부');else finish(20,0,'딜러 승리')}
+/* ---- high & low ---- */
+GM.hl=()=>{g={d:deck(),n:0};g.c=g.d.pop();hlD()};
+function hlD(m){$('#S').innerHTML=`<div class=sub>STREAK ${g.n}/5 · 점수 ${g.n*20}</div><div class=hand>${cd(g.c)}<span class="cd back">?</span></div><div class=mut>${m||'다음 카드는 더 높을까, 낮을까? (A가 최고)'}</div><div class=two><button class=btn onclick="hl(1)">▲ HIGH</button><button class="btn alt" style="color:#f6dc8a;border-color:#f6dc8a" onclick="hl(0)">▼ LOW</button></div>`}
+function hl(up){const n=g.d.pop(),o=g.c;if(n.r==o.r){g.c=n;bp(300,.1);return hlD(`같은 숫자! 무승부 — 연속 횟수 제외 (${L(n.r)})`)}
+const ok=up?n.r>o.r:n.r<o.r;if(ok){g.n++;g.c=n;bp(600+g.n*100,.12);if(g.n>=5)hlE(o,n,1,'5연속 성공! PERFECT 🎉');else hlD(`정답! ${L(o.r)} → ${L(n.r)}`)}else hlE(o,n,g.n>0,`${g.n}연속에서 종료 (${L(o.r)} → ${L(n.r)})`)}
+function hlE(o,n,w,m){$('#S').innerHTML=`<div class=sub>STREAK ${g.n}/5</div><div class=hand>${cd(o)}${cd(n)}</div>`;finish(g.n*20,w,m)}
+/* ---- poker ---- */
+const PN=['하이카드','원페어','투페어','트리플','스트레이트','플러시','풀하우스','포카드','스트레이트 플러시','로열 플러시'],PS=[20,30,45,60,75,80,85,90,95,100];
+function ev(h){const rs=h.map(c=>c.r).sort((a,b)=>b-a),fl=h.every(c=>c.s==h[0].s),cn={};rs.forEach(r=>cn[r]=(cn[r]||0)+1);
+const q=Object.entries(cn).map(([r,n])=>[n,+r]).sort((a,b)=>b[0]-a[0]||b[1]-a[1]),u=q.length==5;let st=u&&rs[0]-rs[4]==4,hi=rs[0];
+if(u&&rs.join()=='14,5,4,3,2'){st=true;hi=5}let k;
+if(st&&fl)k=hi==14?9:8;else if(q[0][0]==4)k=7;else if(q[0][0]==3&&q[1][0]==2)k=6;else if(fl)k=5;else if(st)k=4;else if(q[0][0]==3)k=3;else if(q[0][0]==2&&q[1][0]==2)k=2;else if(q[0][0]==2)k=1;else k=0;
+return{k,t:st?[k,hi]:[k,...q.map(x=>x[1])]}}
+const cmp=(a,b)=>{for(let i=0;i<Math.max(a.length,b.length);i++){const d=(a[i]||0)-(b[i]||0);if(d)return d}return 0};
+GM.poker=()=>{g={d:deck(),p:[],h:[],sel:[],done:0};for(let i=0;i<5;i++){g.p.push(g.d.pop());g.h.push(g.d.pop())}pkD()};
+function pkD(){const o=g.done;$('#S').innerHTML=`<div class=sub>DEALER ${o?PN[ev(g.h).k]:''}</div><div class=hand>${g.h.map(c=>cd(c,!o)).join('')}</div><div class=sub>YOU · ${PN[ev(g.p).k]}</div><div class=hand>${g.p.map((c,i)=>cd(c,0,g.sel.includes(i),o?null:i)).join('')}</div>${o?'':`<div class=mut>바꿀 카드를 탭하세요 (최대 3장) · ${g.sel.length}/3</div><button class=btn onclick="pkGo()">DRAW</button>`}`}
+function pt(i){const k=g.sel.indexOf(i);if(k>=0)g.sel.splice(k,1);else if(g.sel.length<3)g.sel.push(i);bp(400,.04);pkD()}
+function pkGo(){g.sel.forEach(i=>g.p[i]=g.d.pop());const e=ev(g.h);
+if(e.k<4){const cn={};g.h.forEach(c=>cn[c.r]=(cn[c.r]||0)+1);let kp=g.h.filter(c=>cn[c.r]>1);if(!kp.length)kp=[...g.h].sort((a,b)=>b.r-a.r).slice(0,2);g.h=g.h.map(c=>kp.includes(c)?c:g.d.pop())}
+g.done=1;pkD();const a=ev(g.p),b=ev(g.h),c=cmp(a.t,b.t);finish(PS[a.k],c>0,`${PN[a.k]} · ${c>0?'딜러에게 승리!':c<0?'딜러 승리':'무승부'}`)}
+/* ---- effects / season / duel ---- */
+function fx(sc,w){const s=document.querySelector('.felt');if(!w){s&&s.classList.add('shake');return}const cs=['#ffd34d','#e0475b','#4cd68f','#fff','#6ab7ff'];for(let i=0;i<(sc>=90?70:30);i++){const e=document.createElement('i');e.className='cf';e.style.cssText=`left:${Math.random()*100}vw;background:${cs[i%5]};--x:${Math.random()*160-80}px;animation-delay:${Math.random()*.4}s`;document.body.appendChild(e);setTimeout(()=>e.remove(),2400)}
+if(sc>=90){const b=document.createElement('div');b.className='ban';b.textContent=sc==100?'PERFECT!':'BIG WIN!';document.body.appendChild(b);setTimeout(()=>b.remove(),1500)}}
+const hof=()=>(M.hof&&M.hof.length)?`<div class=card><div class=sub>ROYAL HALL OF FAME</div>${[...M.hof].reverse().map(h=>`<div class=rw><span class=rk>🏆</span><span class=nm>${esc(h.name)}<small>SEASON ${h.s} · ${h.wins!=null?(h.wins+'승 · '+(h.matches||0)+'경기'):'기존 기록'}</small></span><b class=champPts>${pointText(h.points!=null?h.points:h.sc)}점</b></div>`).join('')}</div>`:'';
+async function newSeason(){const l=champSorted(),champ=l[0];M={...M,n:M.n+1,hof:champ?[...(M.hof||[]),{s:M.n,name:champ.name,sc:champ.cp||0,points:champ.cp||0,wins:champ.cw||0,matches:champ.cm||0} ]:(M.hof||[])};for(const k of Object.keys(P)){const p=P[k];P[k]={...p,cp:0,cw:0,cd:0,cl:0,cm:0}}if(db){try{await Promise.all(Object.entries(P).map(([k,p])=>db.collection('players').doc(k).set(p)));await db.doc('meta/season').set(M)}catch(e){lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(x){}}}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}cf=0;champMore=false;render()}
+/* ======== GOLDEN JACKPOT SLOT (보너스: 와일드🃏 · 스캐터💰 · 프리스핀) ======== */
+// [사운드] tn(주파수,길이,파형,볼륨,끝주파수,지연): 스윌/감쇠 지원 톤 생성기
+function tn(f,d,t,v,f2,dl){if(!snd)return;try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state=='suspended')ac.resume();const T=ac.currentTime+(dl||0),o=ac.createOscillator(),g=ac.createGain();o.type=t||'sine';o.frequency.setValueAtTime(f,T);if(f2)o.frequency.exponentialRampToValueAtTime(f2,T+d);g.gain.setValueAtTime(v||.06,T);g.gain.exponentialRampToValueAtTime(.001,T+d);o.connect(g);g.connect(ac.destination);o.start(T);o.stop(T+d)}catch(e){}}
+const sS={start:()=>tn(180,.4,'sawtooth',.05,900),tick:()=>tn(500+Math.random()*300,.03,'square',.02),stop:i=>{tn(140,.16,'sine',.14,55);tn(900+i*160,.07,'triangle',.04)},
+win:()=>[523,659,784].forEach((f,i)=>tn(f,.2,'triangle',.07,0,i*.09)),big:()=>{[523,659,784,1047,1319,1568].forEach((f,i)=>tn(f,.3,'sawtooth',.045,0,i*.1));tn(1047,.9,'triangle',.07,0,.6)},
+scat:()=>[880,1109,1319,1760].forEach((f,i)=>tn(f,.28,'sine',.06,f*1.5,i*.09))};
+// [확률] 릴 1칸 가중치(총 21): ⭐🔔 각 5, 👑 3, 💎 2, 7️⃣ 1, 🃏와일드 2(약 9.5%), 💰스캐터 3(약 14%)
+const SYW=[['⭐',5],['🔔',5],['👑',3],['💎',2],['7️⃣',1],['🃏',2],['💰',3]];
+const sym=()=>{let r=Math.random()*21;for(const[s,w]of SYW){if((r-=w)<0)return s}return '⭐'};
+const TRI={'7️⃣':100,'👑':90,'💎':85,'🔔':75,'⭐':75};
+// [페이테이블] 와일드는 어떤 그림이든 대신 / 스캐터 2개→프리스핀 3회, 3개→6회(프리스핀 점수 ×2)
+function slotEval(f){const sc=f.filter(x=>x=='💰').length,rest=f.filter(x=>x!='🃏'),w=3-rest.length;
+if(sc>=2)return{pts:sc==3?60:40,tag:'SCATTER ×'+sc,sc,big:0};
+if(!rest.length)return{pts:100,tag:'WILD JACKPOT',sc,big:1};
+if(rest.every(x=>x==rest[0])&&TRI[rest[0]])return{pts:TRI[rest[0]],tag:rest[0]=='7️⃣'?'777!':'TRIPLE',sc,big:TRI[rest[0]]>=85};
+if(rest.some((x,i)=>rest.indexOf(x)!=i)||w>=1)return{pts:50,tag:'PAIR',sc,big:0};
+return{pts:20,tag:'',sc,big:0}}
+let SM=null;
+const ban=t=>{const b=document.createElement('div');b.className='ban';b.textContent=t;document.body.appendChild(b);setTimeout(()=>b.remove(),1500)};
+function slotModal(cb){SM={cb,total:0,fs:0,mult:1,busy:0};if(bgN)bgN.gain.value=.3;const d=document.createElement('div');d.id='sm';d.className='smo';
+d.innerHTML=`<div class=smc><div class=smb id=smb>GOLDEN JACKPOT</div><div class=mach><div class=reels2><div class=rl id=q0>❔</div><div class=rl id=q1>❔</div><div class=rl id=q2>❔</div></div></div><div class=smi id=smi>레버를 당기세요!</div><div class=smt>TOTAL <b id=smt>0</b></div><button class=btn id=smg onclick="smSpin()">🎰 SPIN</button><div class=pt>${[['7️⃣7️⃣7️⃣',100],['🃏🃏🃏',100],['👑👑👑',90],['💎💎💎',85],['🔔 / ⭐ ×3',75],['같은 그림 2개',50],['💰 ×2 / ×3','FREE SPIN'],['그 외',20]].map(([a,b])=>`<div class=pr><span>${a}</span><b>${b}</b></div>`).join('')}</div><div class=mut>🃏 와일드는 어떤 그림이든 대신해요 · 프리스핀은 점수 ×2</div></div>`;document.body.appendChild(d)}
+function smSpin(){if(!SM||SM.busy)return;SM.busy=1;$('#smg').style.display='none';const fs=SM.mult>1&&SM.fs>0;if(fs)SM.fs--;sS.start();
+const f=[sym(),sym(),sym()],q=[0,1,2].map(i=>$('#q'+i)),st=[0,0,0],near=f[0]==f[1]||(f[0]=='💰'&&f[1]=='💰');q.forEach(e=>e.className='rl spin');
+const iv=setInterval(()=>{q.forEach((e,i)=>{if(!st[i])e.textContent=SYW[Math.floor(Math.random()*7)][0]});sS.tick()},70);
+[1000,1650,near?3200:2400].forEach((d,i)=>setTimeout(()=>{st[i]=1;q[i].textContent=f[i];q[i].className='rl stop';sS.stop(i);if(i==2){clearInterval(iv);setTimeout(()=>smEnd(f,fs),350)}},d))}
+function smEnd(f,fs){const r=slotEval(f),p=r.pts*(fs?SM.mult:1);SM.total+=p;$('#smt').textContent=SM.total;
+if(r.pts>=50||r.sc>=2)f.forEach((s,i)=>$('#q'+i).classList.add('win'));let msg='+'+p+'점'+(r.tag?' · '+r.tag:'');
+if(r.sc>=2){const n=r.sc==3?6:3;SM.fs+=n;SM.mult=2;$('#sm').classList.add('fs');sS.scat();msg+=' · 🎁 FREE SPINS +'+n;ban('FREE SPINS!')}
+else if(r.big){sS.big();fx(100,1);ban(r.pts==100?'JACKPOT!':'BIG WIN!')}else if(r.pts>=50){sS.win();fx(60,1)}else tn(220,.2,'sine',.05,150);
+$('#smi').textContent=msg;$('#smb').textContent=SM.fs>0?'🔥 FREE SPINS ×2 · 남은 '+SM.fs+'회':'GOLDEN JACKPOT';
+setTimeout(()=>{if(!SM)return;SM.busy=0;if(SM.fs>0)smSpin();else smClose()},(r.pts>=85||r.sc>=2)?2200:1400)}
+function smClose(){$('#smi').textContent='TOTAL '+SM.total+'점!';$('#smb').textContent='FINISH';setTimeout(()=>{const c=SM.cb,t=SM.total;$('#sm').remove();SM=null;if(bgN)bgN.gain.value=1;c(t)},1300)}
+/* ======== BGM (프로시저럴 카지노 라운지 · 파일 없이 Web Audio로 생성) ======== */
+let bgOn=true,bgT=0,bgI=0,bgN=null,bgTimer=0;
+try{bgOn=localStorage.getItem('trc_bgm')!='0'}catch(e){}
+const CH=[[57,60,64,67],[50,53,57,60],[55,59,62,65],[48,52,55,59]];/* Am7 Dm7 G7 Cmaj7 */
+const mf=m=>440*Math.pow(2,(m-69)/12);
+function bgTone(m,t,d,ty,v){const o=ac.createOscillator(),g=ac.createGain();o.type=ty;o.frequency.value=mf(m);g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(v,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(bgN);o.start(t);o.stop(t+d+.05)}
+function bgStep(){if(!bgN)return;const q=60/92/2;while(bgT<ac.currentTime+.4){const b=bgI%32,ch=CH[Math.floor(b/8)],s=b%8;
+if(s==0)ch.forEach(n=>bgTone(n,bgT,q*7,'triangle',.018));
+if(s%2==0)bgTone(ch[0]-12+(s==4?7:0),bgT,q*1.6,'sine',.06);
+if(Math.random()<.55)bgTone(ch[Math.floor(Math.random()*4)]+12+(Math.random()<.3?12:0),bgT,q*1.8,'sine',.03);
+bgT+=q;bgI++}}
+function bgStart(){if(!bgOn||!snd||bgTimer)return;try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state=='suspended')ac.resume();bgN=ac.createGain();bgN.connect(ac.destination);bgT=ac.currentTime+.1;bgI=0;bgTimer=setInterval(bgStep,120)}catch(e){}}
+function bgStop(){clearInterval(bgTimer);bgTimer=0;try{bgN&&bgN.disconnect()}catch(e){}bgN=null}
+function bgToggle(){bgOn=!bgOn;try{localStorage.setItem('trc_bgm',bgOn?'1':'0')}catch(e){}bgOn?bgStart():bgStop();render()}
+function sndT(b){snd=!snd;b.textContent=snd?'🔊':'🔇';snd?bgStart():bgStop()}
+addEventListener('pointerdown',()=>{if(bgOn&&!bgTimer)bgStart()});
+document.addEventListener('visibilitychange',()=>{document.hidden?bgStop():bgStart()});
+/* ======== /SLOT ======== */
+let LD=null;
+const gpick=f=>`<div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="${f}('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div>`;
+const locP=()=>LD.r[0].length<=LD.r[1].length?0:1;
+function locGo(k){const a=$('#n1'),b=$('#n2');let n=LD&&LD.n;if(a&&b){const x=a.value.trim(),y=b.value.trim();if(!x||!y||x.toLowerCase()==y.toLowerCase()){$('#lm').textContent='서로 다른 닉네임 2개를 입력하세요';return}n=[x,y]}
+LD={n,game:k,r:[[],[]],sw:(LD&&LD.sw)||[0,0],hand:null,fin:0};vLoc()}
+function locRoll(){if(LD.game=='slot')return slotModal(locSub);if(LD.game=='bj'){const d=deck();LD.hand={d,p:[d.pop(),d.pop()]};return bv(LD.hand.p)==21?locBjS():vLoc()}locSub(DG[LD.game].roll())}
+function locSub(v){LD.r[locP()].push(v);bp(500,.08,'square');vLoc()}
+function locBjH(){const h=LD.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?locBjS():vLoc()}
+function locBjS(){const h=LD.hand,v=bv(h.p);LD.hand=null;locSub(v>21?0:(v==21&&h.p.length==2?22:v))}
+function locQuit(){LD=null;go('menu')}
+async function recordChampionshipMatch(names,result){const delta=result===0?[3,-3]:result===1?[-3,3]:[0,0],now=Date.now();for(let i=0;i<2;i++){const id=pid(names[i]),p={...(P[id]||{name:names[i],s:{},wins:0,plays:0,pts:0,t:0})};p.name=names[i];p.cp=(Number(p.cp)||0)+delta[i];p.cm=(p.cm||0)+1;p.cmt=(p.cmt||0)+1;p.cpt=(Number(p.cpt)||0)+delta[i];if(result===i)p.dw=(p.dw||0)+1;if(result===-1){p.cd=(p.cd||0)+1;p.cdt=(p.cdt||0)+1}else if(result===i){p.cw=(p.cw||0)+1;p.cwt=(p.cwt||0)+1}else{p.cl=(p.cl||0)+1;p.clt=(p.clt||0)+1}p.t=now;P[id]=p}const h={time:now,p1:names[0],p2:names[1],result,winner:result<0?'':names[result]};M.history=[...(M.history||[]),h].slice(-100);if(db){try{await Promise.all(names.map(n=>db.collection('players').doc(pid(n)).set(P[pid(n)])));await db.doc('meta/season').set(M)}catch(e){lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(x){}}}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}}
+function vLoc(){const hd=`<div class=bar><button class=lk onclick="locQuit()">← 나가기</button><span>👥 LOCAL DUEL</span></div>`;
+if(!LD){A.innerHTML=hd+`<h2>LOCAL DUEL · BOOTH MATCH</h2><div class=card><div class=sub>ROYAL CHAMPIONSHIP RULE</div><div class=ruleline><span>승리</span><b class=positive>+3점</b></div><div class=ruleline><span>무승부</span><b>0점</b></div><div class=ruleline><span>패배</span><b class=negative>-3점</b></div><div class=mut>한 기기에서 두 참가자가 번갈아 플레이해요. 한 매치는 최대 5라운드이며, 먼저 3라운드를 이기면 매치 승리!</div></div><div class=card><div class=sub>PLAYERS</div><input id=n1 maxlength=10 placeholder="1P 닉네임" value="${esc(me)}"><input id=n2 maxlength=10 placeholder="2P 닉네임"><p id=lm class=mut></p><div class=sub>게임 선택</div>${gpick('locGo')}<button class=btn alt onclick="go('champ')">🏆 ROYAL CHAMPIONSHIP 랭킹 보기</button></div>`;return}
+const D=DG[LD.game],R=LD.r,n=Math.min(R[0].length,R[1].length),w=[0,0];let rows='';
+for(let i=0;i<n;i++){const c=cmp(D.sc(R[0][i]),D.sc(R[1][i]));if(c>0)w[0]++;if(c<0)w[1]++;rows+=`<div class=rw><span class=rk>R${i+1}</span><span class=nm>${D.show(R[0][i])} vs ${D.show(R[1][i])}</span><b>${c>0?'◀':c<0?'▶':'➖'}</b></div>`}
+const done=w[0]>=3||w[1]>=3||n>=5,p=locP();let body;
+if(done){const k=w[0]>w[1]?0:w[1]>w[0]?1:-1,delta=k<0?[0,0]:k===0?[3,-3]:[-3,3];body=`<div class=huge>${k<0?'DRAW':'WIN'}</div><div class=big>${k<0?'무승부':esc(LD.n[k])+' 승리'}</div><div class=sub>이번 매치 대회 점수</div><div class=ruleline><span>${esc(LD.n[0])}</span><b class="${delta[0]>0?'positive':delta[0]<0?'negative':''}">${pointText(delta[0])}점</b></div><div class=ruleline><span>${esc(LD.n[1])}</span><b class="${delta[1]>0?'positive':delta[1]<0?'negative':''}">${pointText(delta[1])}점</b></div><div class=sub>다음 게임을 골라 계속 대결할 수 있어요.</div>${gpick('locGo')}<button class=btn alt onclick="go('champ')">🏆 통합 랭킹 확인</button>`;
+if(!LD.fin){LD.fin=1;if(k>=0)LD.sw[k]++;recordChampionshipMatch(LD.n,k).then(()=>{if(view==='loc'&&LD&&LD.fin)vLoc()});fan(k>=0);fx(k>=0?100:0,k>=0)}}
+else body=`<div class=big>${esc(LD.n[p])} 차례</div><div class=mut>대회 누적 점수 · ${esc(LD.n[0])} ${pointText((P[pid(LD.n[0])]||{}).cp||0)}점 / ${esc(LD.n[1])} ${pointText((P[pid(LD.n[1])]||{}).cp||0)}점</div>`+(LD.hand?`<div class=hand>${LD.hand.p.map(c=>cd(c)).join('')}</div><div class=sub>${bv(LD.hand.p)}</div><div class=two><button class=btn onclick="locBjH()">HIT</button><button class=btn onclick="locBjS()">STAND</button></div>`:`<button class=btn onclick="locRoll()">${D.ic} GO!</button>`);
+A.innerHTML=hd+`<div class="card c"><div class=sub>${D.ic} ${D.n}</div><div class=big>${esc(LD.n[0])} ${w[0]} : ${w[1]} ${esc(LD.n[1])}</div><div class=mut>시리즈 ${LD.sw[0]} : ${LD.sw[1]}</div><div class=felt>${rows}${body}</div></div>`}
+function vTv(){A.innerHTML=`<div class=bar><button class=lk onclick="go('menu')">← MENU</button><span>📺 LIVE</span></div><div class=hero><h1 style="font-size:36px">THUNDER ROYALE</h1><div class=casino style="font-size:16px">ROYAL CHAMPIONSHIP · SEASON ${M.n}</div></div>`+champBoard(10)+hof()}
+let idle=Date.now();['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>idle=Date.now()));
+setInterval(()=>{if(Date.now()-idle>90000&&['loc','rank','prof','adm','champ'].includes(view)){LD=null;au=0;go('menu')}},5000);
+let pr=0;
+const dtitle=w=>w>=20?'THUNDER GOD':w>=10?'LEGEND':w>=5?'ROYAL':w>=3?'ACE':w>=1?'PLAYER':'ROOKIE';
+function vProf(){const p=P[pid(me)]||{},k=sorted().findIndex(x=>x.name==me),ck=champSorted().findIndex(x=>x.name==me);A.innerHTML=bar()+`<div class="card c"><div class=sub>MY PROFILE</div><div class=big>${esc(me)} ${k==0||ck==0?'🏆':''}</div><div class=ok>${dtitle(p.dw||0)}</div>${(p.dw||0)>=3?'<div class=new>🎁 3승 달성! 부스 운영자에게 이 화면을 보여주세요</div>':''}<div class=mut>⚔️ 기존 대결 ${(p.dw||0)}승 · 🏆 명예의 전당 ${(M.hof||[]).filter(h=>h.name==me).length}</div><div class=champTop><div class=sub>ROYAL CHAMPIONSHIP · SEASON ${M.n}</div><div class=champPts>${pointText(p.cp||0)}점</div><div class=mut>${p.cw||0}승 · ${p.cd||0}무 · ${p.cl||0}패 · ${p.cm||0}경기${ck>=0?' · 현재 '+(ck+1)+'위':''}</div><div class=mut>통산 ${pointText(p.cpt||0)}점 · ${p.cmt||0}경기</div></div></div><button class=btn alt onclick="go('champ')">🏆 대회 전체 랭킹</button>`}
+function dnext(){const c=[dq.mine&&dq.mine.next,dq.opp&&dq.opp.next].filter(x=>x&&x.id>dq.mid).sort((a,b)=>b.id-a.id)[0];if(!c)return;dq.mid=c.id;dq.game=c.game;dq.fin=0;dq.hand=null;dq.mine={...dq.mine,game:c.game,mid:c.id,rolls:[]};db.doc(dp(dq.role)).set(dq.mine).catch(()=>{})}
+function duelNext(game){dq.mine={...dq.mine,next:{id:Date.now(),game}};db.doc(dp(dq.role)).set(dq.mine).catch(()=>{});dnext();vDuel()}
+function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join('')}</div><div class=sub>YOU ${bv(h.p)}</div><div class=two><button class=btn onclick="bjH()">HIT</button><button class=btn onclick="bjS()">STAND</button></div>`}
+function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
+function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
+function renameUI(){A.innerHTML=bar()+`<div class=card><div class=sub>NEW NICKNAME</div><input id=nn maxlength=10 value="${esc(me)}"><button class=btn onclick="renameDo()">바꾸기</button><p id=m class=mut>점수와 기록은 그대로 유지돼요.</p></div>`}
+async function renameDo(){const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
+const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}
+if(db){try{await db.collection('players').doc(n).set(p);if(n!=o)await db.collection('players').doc(o).delete()}catch(e){}}else lsSave();go('menu')}
+const slp=f=>{const s=new Set(f).size;return s==1?[100,85,90,75,75][f[0]]:s==2?50:20};
+const dg=()=>DG[dq.game]||DG.dice;
+const DG={
+dice:{n:'DICE',ic:'🎲',roll:()=>[rd(),rd()],sc:v=>[v[0]+v[1]],show:v=>DF[v[0]-1]+DF[v[1]-1]+' ('+(v[0]+v[1])+')'},
+slot:{n:'SLOT',ic:'🎰',roll:()=>0,sc:v=>[Array.isArray(v)?slp(v):v],show:v=>Array.isArray(v)?v.map(i=>SY[i]).join('')+' '+slp(v):'🎰 '+v+'점'},
+card:{n:'HIGH CARD',ic:'🃏',roll:()=>deck()[0],sc:v=>[v.r],show:v=>L(v.r)+SU[v.s]},
+roulette:{n:'ROULETTE',ic:'🎡',roll:()=>Math.floor(Math.random()*37),sc:v=>[v],show:v=>({r:'🔴',b:'⚫',g:'🟢'}[col(v)])+v},
+poker:{n:'POKER',ic:'♠️',roll:()=>deck().slice(0,5),sc:v=>ev(v).t,show:v=>PN[ev(v).k]},
+bj:{n:'BLACKJACK',ic:'🎴',roll:()=>0,sc:v=>[v],show:v=>v==0?'BUST':v==22?'BJ!':v}};
+const dp=r=>`duels/${dq.code}${r}`;
+function dsub(){dq.u=['h','g'].map(r=>db.doc(dp(r)).onSnapshot(s=>{const d=s.exists?s.data():null;if(r==dq.role){if(d&&((d.mid||0)>=dq.mid||(d.next&&d.next.id>dq.mid)))dq.mine=d}else dq.opp=d;dnext();if(view=='duel'&&dq)vDuel()},()=>{}))}
+async function duelNew(game){const code=String(1000+Math.floor(Math.random()*9000));dq={code,role:'h',game,mid:0,sw:{w:0,l:0},mine:{name:me,game,mid:0,rolls:[]},opp:null};try{await db.doc(dp('g')).delete()}catch(e){}try{await db.doc(dp('h')).set(dq.mine)}catch(e){}dsub();vDuel()}
+async function duelJoin(){const code=$('#dc').value.trim();if(code.length!=4)return;let s;try{s=await db.doc(`duels/${code}h`).get()}catch(e){}if(!s||!s.exists){$('#dc').value='';$('#dc').placeholder='방을 찾을 수 없어요';return}
+dq={code,role:'g',game:s.data().game||'dice',mid:0,sw:{w:0,l:0},mine:{name:me,mid:0,rolls:[]},opp:s.data()};try{await db.doc(dp('g')).set(dq.mine)}catch(e){}dsub();vDuel()}
+async function duelRoll(){if(dq.game=='slot')return slotModal(duelSub);if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}return duelSub(dg().roll())}
+async function duelSub(v){const a=JSON.stringify(v);bp(500,.08,'square');dq.mine={...dq.mine,name:me,game:dq.game,mid:dq.mid,rolls:[...dq.mine.rolls,a]};vDuel();try{await db.doc(dp(dq.role)).set(dq.mine)}catch(e){}}
+async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await db.collection('players').doc(id).set(P[id])}catch(e){}}
+function duelLeave(){if(dq){(dq.u||[]).forEach(u=>u());db.doc(dp(dq.role)).delete().catch(()=>{})}dq=null;go('menu')}
+function dres(){const a=dq.mine.rolls,b=(dq.opp&&(dq.opp.mid||0)==dq.mid&&dq.opp.rolls)||[],n=Math.min(a.length,b.length);let w=0,l=0;const rows=[];for(let i=0;i<n;i++){const p=JSON.parse(a[i]),q=JSON.parse(b[i]),c=cmp(dg().sc(p),dg().sc(q));rows.push([p,q,Math.sign(c)]);if(c>0)w++;if(c<0)l++}return{rows,w,l,n,done:w>=3||l>=3||n>=5}}
+function vDuel(){if(!db){A.innerHTML=bar()+'<div class="card c">⚔️ 온라인 연결이 필요해요.<div class=mut>하단에 🟢 표시가 보일 때 사용할 수 있어요.</div></div>';return}
+if(!dq){A.innerHTML=bar()+`<h2>⚔️ DICE DUEL ONLINE</h2><div class=card><div class=mut>친구 2명이 각자 폰에서 같은 게임으로 맞붙어요. 먼저 3승하면 승리! 끝나면 다른 게임을 고르며 계속할 수 있어요.</div><div class=sub>게임을 고르면 방이 만들어져요</div><div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="duelNew('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div><div class=sub style="margin-top:12px">또는 코드로 참가</div><input id=dc inputmode=numeric maxlength=4 placeholder="방 코드 4자리"><button class="btn alt" onclick="duelJoin()">참가하기</button></div>`;return}
+const r=dres(),a=dq.mine.rolls,on=dq.opp&&dq.opp.name,f=dg().show;let end='';
+if(r.done){const res=r.w>r.l?1:r.w<r.l?-1:0;end=`<div class=huge>${res>0?'WIN':res<0?'LOSE':'DRAW'}</div><div class=sub>다음 게임 고르기</div><div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="duelNext('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div>`;if(!dq.fin){dq.fin=1;if(res>0)dq.sw.w++;if(res<0)dq.sw.l++;fan(res>0);fx(res>0?100:0,res>0);if(res>0)duelWin()}}
+A.innerHTML=bar()+`<div class="card c"><div class=sub>${dg().ic} ${dg().n} · ROOM CODE</div><div class=big>${dq.code}</div><div class=mut>${esc(me)} ⚔️ ${on?esc(dq.opp.name):'상대 대기 중…'} · 시리즈 ${dq.sw.w}:${dq.sw.l}</div><div class=felt>${r.rows.map((x,i)=>`<div class=rw><span class=rk>R${i+1}</span><span class=nm>${f(x[0])} vs ${f(x[1])}</span><b>${x[2]>0?'✅':x[2]<0?'❌':'➖'}</b></div>`).join('')}<div class=sub>${r.w} : ${r.l}</div>${end}${!r.done&&on&&a.length==r.n?(dq.hand?bjUI():'<button class=btn onclick="duelRoll()">'+dg().ic+' GO!</button>'):!r.done&&on?'<div class=mut>상대를 기다리는 중…</div>':''}</div><button class="btn alt" onclick="duelLeave()">나가기</button></div>`}
+/* ---- init ---- */
+render();
+(async()=>{try{if(window.claude){const c=await claude.use('db');if(c){db=c;c.doc('meta/season').onSnapshot(s=>{if(s.exists)M=s.data();M.hof=M.hof||[];M.history=M.history||[];if(['menu','rank','prof','adm','champ','tv'].includes(view))render()},()=>{});c.collection('players').onSnapshot(s=>{P={};s.docs.forEach(d=>P[d.id]=d.data());if(['menu','rank','prof','adm','tv','champ'].includes(view))render()},()=>{})}}}catch(e){}
+if(!db){P=lsLoad();try{M=JSON.parse(localStorage.getItem('trc_meta'))||M;M.hof=M.hof||[];M.history=M.history||[]}catch(e){}if(view=='menu')render()}})();
+</script></body></html>
