@@ -121,11 +121,14 @@ input[type=file]{font-size:12px;padding:8px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 
 </style></head><body><div id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
 <script>
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
 const PIN='7777',$=s=>document.querySelector(s),A=$('#app');
-let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
@@ -419,9 +422,65 @@ if(r.done){const res=r.w>r.l?1:r.w<r.l?-1:0,points=res>0?3:res<0?-3:0;end=`<div 
 A.innerHTML=bar()+`<div class="card c"><div class=sub>${dg().ic} ${dg().n} · ROOM CODE</div><div class=big>${dq.code}</div><div class=mut>${esc(me)} ⚔️ ${on?esc(dq.opp.name):'상대 대기 중…'} · 시리즈 ${dq.sw.w}:${dq.sw.l}</div><div class=felt>${r.rows.map((x,i)=>`<div class=rw><span class=rk>R${i+1}</span><span class=nm>${f(x[0])} vs ${f(x[1])}</span><b>${x[2]>0?'✅':x[2]<0?'❌':'➖'}</b></div>`).join('')}<div class=sub>${r.w} : ${r.l}</div>${end}${!r.done&&on&&a.length==r.n?(dq.hand?bjUI():'<button class=btn onclick="duelRoll()">'+dg().ic+' GO!</button>'):!r.done&&on?'<div class=mut>상대를 기다리는 중…</div>':''}</div><button class="btn alt" onclick="duelLeave()">나가기</button></div>`}
 let onlinePlayersReady=false,onlineMetaReady=false;
 function migrateOnlineOnlyScores(){if(!onlinePlayersReady||!onlineMetaReady||M.onlineScoringV1)return;for(const id of Object.keys(P)){const p=P[id];if(!p)continue;if(p.matchLog&&p.matchLog.length)p.localLog=[...(p.localLog||[]),...p.matchLog.map(h=>({at:h.at,opponent:h.opponent,result:h.result}))].slice(-50);p.matchLog=[];p.cp=0;p.cm=0;p.cw=0;p.cd=0;p.cl=0;p.cmt=0;p.cpt=0;p.cwt=0;p.cdt=0;p.clt=0;}M.history=[];M.onlineScoringV1=true;if(db){Promise.all(Object.entries(P).map(([id,p])=>db.collection('players').doc(id).set(p))).then(()=>db.doc('meta/season').set(M)).catch(()=>{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}})}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}}
-/* ---- init ---- */
+/* ---- Firebase connection ---- */
+const firebaseConfig = {
+  apiKey: "AIzaSyBZIoNnf_Yu22gLKJkJyT7AjHnJffkDwHk",
+  authDomain: "thunder-royale-arcade.firebaseapp.com",
+  projectId: "thunder-royale-arcade",
+  storageBucket: "thunder-royale-arcade.firebasestorage.app",
+  messagingSenderId: "666164878383",
+  appId: "1:666164878383:web:f5de713a9ac3f7fa3abada",
+  measurementId: "G-JK5K9CM5J9"
+};
+function firebaseConnectionError(e){
+  firebaseError = e && e.message ? e.message : String(e || 'Firebase 연결 오류');
+  console.error('[THUNDER ROYALE] Firebase:', e);
+  if(view==='duel' && db) vDuel();
+}
 applyTheme();
 render();
-(async()=>{try{if(window.claude){const c=await claude.use('db');if(c){db=c;c.doc('meta/season').onSnapshot(s=>{if(s.exists)M=s.data();M.hof=M.hof||[];M.history=M.history||[];onlineMetaReady=true;migrateOnlineOnlyScores();if(['menu','rank','prof','adm','champ','tv'].includes(view))render()},()=>{});c.collection('players').onSnapshot(s=>{P={};s.docs.forEach(d=>P[d.id]=d.data());onlinePlayersReady=true;migrateOnlineOnlyScores();if(['menu','rank','prof','adm','tv','champ'].includes(view))render()},()=>{})}}}catch(e){}
-if(!db){P=lsLoad();try{M=JSON.parse(localStorage.getItem('trc_meta'))||M;M.hof=M.hof||[];M.history=M.history||[]}catch(e){}onlinePlayersReady=true;onlineMetaReady=true;migrateOnlineOnlyScores();if(view=='menu')render()}})();
+(async()=>{
+  try{
+    if(!window.firebase) throw new Error('Firebase SDK를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const auth=firebase.auth();
+    try{await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)}catch(e){console.warn('Auth persistence:',e)}
+    if(!auth.currentUser) await auth.signInAnonymously();
+    db=firebase.firestore();
+    try{db.settings({ignoreUndefinedProperties:true})}catch(e){}
+    db.doc('meta/season').onSnapshot(s=>{
+      firebaseError='';
+      if(s.exists) M=s.data();
+      else{
+        try{M=JSON.parse(localStorage.getItem('trc_meta'))||M}catch(e){}
+      }
+      M.hof=M.hof||[];M.history=M.history||[];
+      onlineMetaReady=true;
+      migrateOnlineOnlyScores();
+      if(!s.exists && M.onlineScoringV1) db.doc('meta/season').set(M).catch(firebaseConnectionError);
+      if(['menu','rank','prof','adm','champ','tv'].includes(view))render();
+    },firebaseConnectionError);
+    db.collection('players').onSnapshot(s=>{
+      const localPlayers=lsLoad(),remotePlayers={};
+      s.docs.forEach(d=>remotePlayers[d.id]=d.data());
+      P={...localPlayers,...remotePlayers};
+      onlinePlayersReady=true;
+      migrateOnlineOnlyScores();
+      const missingIds=Object.keys(localPlayers).filter(id=>!remotePlayers[id]);
+      if(missingIds.length){
+        Promise.all(missingIds.map(id=>db.collection('players').doc(id).set(P[id]))).catch(firebaseConnectionError);
+      }
+      lsSave();
+      if(['menu','rank','prof','adm','tv','champ'].includes(view))render();
+    },firebaseConnectionError);
+  }catch(e){
+    firebaseConnectionError(e);
+    db=null;
+    P=lsLoad();
+    try{M=JSON.parse(localStorage.getItem('trc_meta'))||M;M.hof=M.hof||[];M.history=M.history||[]}catch(x){}
+    onlinePlayersReady=true;onlineMetaReady=true;
+    migrateOnlineOnlyScores();
+    if(view==='menu')render();
+  }
+})();
 </script></body></html>
