@@ -214,25 +214,21 @@ function tap(){taps++;setTimeout(()=>taps=0,3000);if(taps>=5){taps=0;au=0;cf=0;v
 async function login(){
  const v=$('#nn').value.trim();if(!v)return;
  if(blockedNickname(v)){alert('부적절한 닉네임은 사용할 수 없습니다.');return}
- if(!authReady||!functionsApi||!auth?.currentUser){alert('Firebase 로그인 준비 중이에요. 잠시 후 다시 시도해 주세요.');return}
+ if(!authReady||!auth?.currentUser){alert('Firebase 로그인 준비 중이에요. 잠시 후 다시 시도해 주세요.');return}
  const id=pid(v);
  try{
-  const claim=await functionsApi.httpsCallable('claimPlayer')({playerId:id,name:v});
-  P[id]=claim.data.player||P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
-  me=v;identityVerified=true;ensureDaily(P[id]);await persistPlayer(id);
+  P[id]=P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
+  P[id].name=v;
+  if(auth.currentUser)P[id].ownerUid=auth.currentUser.uid;
+  me=v;identityVerified=true;ensureDaily(P[id]);
+  await persistPlayer(id);
   try{localStorage.setItem('trc_me',v)}catch(e){}
   render();
  }catch(e){
-  if(e.code==='functions/not-found'){
-   if(P[id]?.moderation?.status==='banned'){alert('이 계정은 정지되었습니다.');return}
-   P[id]=P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
-   P[id].name=v;if(auth?.currentUser)P[id].ownerUid=auth.currentUser.uid;
-   me=v;identityVerified=true;ensureDaily(P[id]);await persistPlayer(id);
-   try{localStorage.setItem('trc_me',v)}catch(x){}
-   alert('Cloud Functions 배포 전 임시 입장입니다. 자동 제재와 서버 관리자 기능은 백엔드 배포 후 활성화됩니다.');
-   render();return;
-  }
-  alert('입장할 수 없습니다: '+(e.message||e));
+  lsSave();
+  try{localStorage.setItem('trc_me',v)}catch(x){}
+  me=v;identityVerified=true;
+  render();
  }
 }
 function logout(){me='';identityVerified=false;try{localStorage.removeItem('trc_me')}catch(e){}render()}
@@ -270,22 +266,14 @@ async function admRollback(id){if(!confirm('이 관리 작업 직전의 계정 �
 async function admAll(){alert('전체 초기화는 안전을 위해 이 화면에서 비활성화했어요. 필요한 경우 백업 후 Firebase 콘솔에서 별도 작업해 주세요.')}
 function accountBlocked(){const p=P[pid(me)];if(authReady&&!identityVerified){alert('계정 서버 인증이 아직 완료되지 않았어요. 잠시 후 다시 시도해 주세요.');return true}if(p?.ownerUid&&auth?.currentUser&&p.ownerUid!==auth.currentUser.uid){alert('이 계정은 다른 기기에 연결되어 있습니다.');return true}if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
 function blockedNickname(name){const n=String(name||'').toLowerCase().replace(/[\s._-]/g,'');return ['시발','씨발','ㅅㅂ','병신','븅신','개새끼','좆','ㅈㄴ','fuck','shit','bitch','nigger'].some(w=>n.includes(w.replace(/[\s._-]/g,'')))}
-async function verifyStoredIdentity(){
- if(identityVerified||!me||!functionsApi||!auth?.currentUser)return;
+function verifyStoredIdentity(){
+ if(identityVerified||!me||!auth?.currentUser)return;
  const id=pid(me);
- try{
-  const claim=await functionsApi.httpsCallable('claimPlayer')({playerId:id,name:me});
-  P[id]=claim.data.player||P[id];identityVerified=true;lsSave();
-  if(['menu','rank','prof','adm','champ'].includes(view))render();
- }catch(e){
-  if(e.code==='functions/not-found'){
-   if(P[id]?.moderation?.status==='banned'){me='';try{localStorage.removeItem('trc_me')}catch(x){}identityVerified=true;alert('이 계정은 정지되었습니다.');render();return}
-   P[id]=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
-   P[id].ownerUid=auth.currentUser.uid;identityVerified=true;lsSave();return;
-  }
-  me='';identityVerified=true;try{localStorage.removeItem('trc_me')}catch(x){}
-  alert('저장된 계정 인증에 실패해 로그아웃했어요: '+(e.message||e));render();
- }
+ P[id]=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
+ if(!P[id].ownerUid)P[id].ownerUid=auth.currentUser.uid;
+ identityVerified=true;
+ lsSave();
+ if(['menu','rank','prof','adm','champ'].includes(view))render();
 }
 
 
