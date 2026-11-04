@@ -7,7 +7,7 @@
 - Admin authorization by Firebase Authentication UID allowlist. There is no client-side admin PIN.
 
 ## One-time Firebase setup
-1. Install Firebase CLI and sign in with the Firebase project owner account.
+1. Use a Firebase project on the Blaze (pay-as-you-go) plan; Cloud Functions deployment may require billing to be enabled. Install Firebase CLI and sign in with the Firebase project owner account.
 2. In Firebase Console → Authentication → Sign-in method, keep Anonymous enabled (the game currently uses anonymous auth).
 3. Open the game on the device that should administer it. Tap the THUNDER ROYALE title/logo five times to open the hidden admin panel. The panel displays that device's Firebase Auth UID; login is not required.
 4. Copy that UID. In the repository's `functions` folder create a local `.env` file (do not commit it):
@@ -20,7 +20,7 @@
    cd functions && npm install && cd ..
    firebase deploy --only functions
    ```
-6. Reload the game. Open the hidden admin panel and press **서버 관리자 인증**.
+6. Reload the game. Open the hidden admin panel and press **서버 관리자 인증**. Until `claimPlayer` is deployed, the page permits a clearly labeled temporary legacy login; automated moderation and secure admin actions are not active during that interim.
 7. Player profiles are claimed by the current anonymous Firebase UID on first login. This means a nickname is tied to that browser/device identity; anonymous sign-in does not provide cross-device account recovery. A banned UID is blocked from creating another nickname on the same Firebase identity.
 
 ## Important security notes
