@@ -248,7 +248,7 @@ exports.adminAction = onCall(async request => {
         if (currentValue !== Number(details.afterValue)) throw new HttpsError("failed-precondition", "해당 게임 최고 점수가 이후 변경되어 자동 롤백할 수 없습니다. 관리자 점수 조정을 이용해 주세요.");
         restored.s = { ...(live.s || {}), [game]: Number(details.beforeValue) || 0 };
       } else {
-        restored[field] = Math.max(0, (Number(live[field]) || 0) - delta);
+        restored[field] = Math.max(0, (Number(live[field]) || 0) - (Number(details.afterValue) - Number(details.beforeValue)));
       }
       await ref.set(restored);
     } else if (record.action === "setBan") {
