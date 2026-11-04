@@ -129,7 +129,7 @@ input[type=file]{font-size:12px;padding:8px}
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
 const $=s=>document.querySelector(s),A=$('#app');
-let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,authReady=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,authReady=false,identityVerified=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
@@ -219,7 +219,7 @@ async function login(){
  try{
   const claim=await functionsApi.httpsCallable('claimPlayer')({playerId:id,name:v});
   P[id]=claim.data.player||P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
-  me=v;ensureDaily(P[id]);await persistPlayer(id);
+  me=v;identityVerified=true;ensureDaily(P[id]);await persistPlayer(id);
   try{localStorage.setItem('trc_me',v)}catch(e){}
   render();
  }catch(e){
@@ -235,7 +235,7 @@ async function login(){
   alert('입장할 수 없습니다: '+(e.message||e));
  }
 }
-function logout(){me='';try{localStorage.removeItem('trc_me')}catch(e){}render()}
+function logout(){me='';identityVerified=false;try{localStorage.removeItem('trc_me')}catch(e){}render()}
 function startTour(){if(accountBlocked())return;mode='tour';tour={i:0,r:{}};gid=G[0].id;go('game')}
 function startFree(id){if(accountBlocked())return;mode=pr?'prac':'free';gid=id;go('game')}
 function vSel(){const p=P[pid(me)]||{s:{}};A.innerHTML=bar()+`<h2>${pr?'🎈 PRACTICE MODE':'SOLO PLAY · CHOOSE GAME'}</h2><div class=mut>${pr?'연습 모드는 최고 기록·미션·경험치를 저장하지 않아요.':'자유롭게 플레이하고 개인 최고 기록을 갱신하세요.'}</div><div class=two><button class=btn alt onclick="pr=${pr?0:1};vSel()">${pr?'기록 모드로 전환':'🎈 연습 모드로 전환'}</button><button class=btn alt onclick="startTour()">🏅 종합 토너먼트</button></div><div class=grid>${G.map(x=>`<button class=gc onclick="startFree('${x.id}')"><span>${x.ic}</span>${x.n}<small>최고 ${p.s&&p.s[x.id]!=null?p.s[x.id]:'—'}점</small></button>`).join('')}</div><button class=lk onclick="go('guide')">📖 규칙 확인</button>`}
@@ -270,6 +270,24 @@ async function admRollback(id){if(!confirm('이 관리 작업 직전의 계정 �
 async function admAll(){alert('전체 초기화는 안전을 위해 이 화면에서 비활성화했어요. 필요한 경우 백업 후 Firebase 콘솔에서 별도 작업해 주세요.')}
 function accountBlocked(){const p=P[pid(me)];if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
 function blockedNickname(name){const n=String(name||'').toLowerCase().replace(/[\\s._-]/g,'');return ['시발','씨발','ㅅㅂ','병신','븅신','개새끼','좆','ㅈㄴ','fuck','shit','bitch','nigger'].some(w=>n.includes(w.replace(/[\\s._-]/g,'')))}
+async function verifyStoredIdentity(){
+ if(identityVerified||!me||!functionsApi||!auth?.currentUser)return;
+ const id=pid(me);
+ try{
+  const claim=await functionsApi.httpsCallable('claimPlayer')({playerId:id,name:me});
+  P[id]=claim.data.player||P[id];identityVerified=true;lsSave();
+  if(['menu','rank','prof','adm','champ'].includes(view))render();
+ }catch(e){
+  if(e.code==='functions/not-found'){
+   if(P[id]?.moderation?.status==='banned'){me='';try{localStorage.removeItem('trc_me')}catch(x){}identityVerified=true;alert('이 계정은 정지되었습니다.');render();return}
+   P[id]=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
+   P[id].ownerUid=auth.currentUser.uid;identityVerified=true;lsSave();return;
+  }
+  me='';identityVerified=true;try{localStorage.removeItem('trc_me')}catch(x){}
+  alert('저장된 계정 인증에 실패해 로그아웃했어요: '+(e.message||e));render();
+ }
+}
+
 
 /* ---- cards ---- */
 const SU='♠♥♦♣',L=r=>({11:'J',12:'Q',13:'K',14:'A'}[r]||r);
@@ -432,7 +450,7 @@ function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join
 function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
 function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
 function renameUI(){A.innerHTML=bar()+`<div class=card><div class=sub>NEW NICKNAME</div><input id=nn maxlength=10 value="${esc(me)}"><button class=btn onclick="renameDo()">바꾸기</button><p id=m class=mut>점수와 기록은 그대로 유지돼요.</p></div>`}
-async function renameDo(){const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
+async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
 const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}
 if(db){try{await db.collection('players').doc(n).set(p);if(n!=o)await db.collection('players').doc(o).delete()}catch(e){}}else lsSave();go('menu')}
 const slp=f=>{const s=new Set(f).size;return s==1?[100,85,90,75,75][f[0]]:s==2?50:20};
@@ -509,7 +527,10 @@ render();
       migrateOnlineOnlyScores();
       const missingIds=Object.keys(localPlayers).filter(id=>!remotePlayers[id]);
       if(missingIds.length){
-        Promise.all(missingIds.map(id=>db.collection('players').doc(id).set(P[id]))).catch(firebaseConnectionError);
+        Promise.all(missingIds.map(id=>db.collection('players').doc(id).set(P[id])))
+          .then(()=>verifyStoredIdentity()).catch(firebaseConnectionError);
+      }else{
+        verifyStoredIdentity();
       }
       lsSave();
       if(['menu','rank','prof','adm','tv','champ'].includes(view))render();
