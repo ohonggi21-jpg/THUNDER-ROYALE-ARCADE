@@ -38,16 +38,18 @@ function playerRef(id) {
   }
   return db.collection("players").doc(id);
 }
-async function writeAudit(uid, action, playerId, before, after, note = "") {
-  await db.collection("admin_audit").add({
+async function writeAudit(uid, action, playerId, before, after, note = "", details = {}) {
+  const ref = await db.collection("admin_audit").add({
     actorUid: uid,
     action,
     playerId: playerId || null,
     note: cleanReason(note),
     before: before || null,
     after: after || null,
+    details: details || {},
     at: admin.firestore.FieldValue.serverTimestamp()
   });
+  return ref.id;
 }
 function isBlockedName(name) {
   const normalized = String(name || "").toLowerCase().replace(/[\s._-]/g, "");
@@ -57,7 +59,7 @@ function suspiciousLog(player) {
   const logs = Array.isArray(player && player.log) ? player.log : [];
   const now = Date.now();
   const recent = logs.filter(x => x && Number(x.at) > now - 60000);
-  if (recent.length >= 16) return "짧은 시간에 비정상적으로 많은 점수 기록";
+  if (recent.length >= 30) return "짧은 시간에 비정상적으로 많은 점수 기록";
   if (logs.some(x => Number(x.score) > 100 || Number(x.score) < 0)) return "게임 점수 허용 범위 초과";
   if ((Number(player && player.plays) || 0) > logs.length + 5 && logs.length >= 20) {
     return "플레이 기록과 점수 기록 불일치";
@@ -216,7 +218,7 @@ exports.adminAction = onCall(async request => {
     }
     after.adminUpdatedAt = admin.firestore.FieldValue.serverTimestamp();
     await ref.set(after);
-    await writeAudit(uid, action, id, before, after, field + " " + (delta > 0 ? "+" : "") + delta + " · " + cleanReason(data.reason));
+    await writeAudit(uid, action, id, before, after, field + " " + (delta > 0 ? "+" : "") + delta + " · " + cleanReason(data.reason), { field, delta, beforeValue: field.startsWith("s.") ? (Number(before.s && before.s[field.slice(2)]) || 0) : (Number(before[field]) || 0), afterValue: field.startsWith("s.") ? after.s[field.slice(2)] : after[field] });
     return { ok: true, value: field.startsWith("s.") ? after.s[field.slice(2)] : after[field] };
   }
 
@@ -230,16 +232,46 @@ exports.adminAction = onCall(async request => {
     if (!record.playerId || !record.before) throw new HttpsError("failed-precondition", "복원할 계정 스냅샷이 없습니다.");
     const ref = playerRef(record.playerId);
     const current = await ref.get();
-    await ref.set(record.before);
-    if (record.before.ownerUid) {
-      const bannedRef = db.collection("banned_users").doc(record.before.ownerUid);
-      if (record.before.moderation && record.before.moderation.status === "banned") {
-        await bannedRef.set({ status: "banned", playerId: record.playerId, reason: record.before.moderation.reason || "복원된 제재", updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    if (record.action === "deletePlayer") {
+      if (current.exists) throw new HttpsError("failed-precondition", "같은 ID의 계정이 이미 다시 만들어져 전체 복원을 중단했습니다.");
+      await ref.set(record.before);
+    } else if (record.action === "adjustScore") {
+      if (!current.exists) throw new HttpsError("not-found", "계정이 삭제되어 점수만 롤백할 수 없습니다.");
+      const details = record.details || {};
+      const field = String(details.field || "");
+      const delta = Number(details.delta);
+      const live = current.data();
+      const restored = { ...live };
+      if (field.startsWith("s.")) {
+        const game = field.slice(2);
+        const currentValue = Number(live.s && live.s[game]) || 0;
+        if (currentValue !== Number(details.afterValue)) throw new HttpsError("failed-precondition", "해당 게임 최고 점수가 이후 변경되어 자동 롤백할 수 없습니다. 관리자 점수 조정을 이용해 주세요.");
+        restored.s = { ...(live.s || {}), [game]: Number(details.beforeValue) || 0 };
+      } else {
+        restored[field] = Math.max(0, (Number(live[field]) || 0) - delta);
+      }
+      await ref.set(restored);
+    } else if (record.action === "setBan") {
+      if (!current.exists) throw new HttpsError("not-found", "계정을 찾을 수 없습니다.");
+      const live = current.data();
+      const restored = { ...live };
+      if (record.before.moderation === undefined) delete restored.moderation;
+      else restored.moderation = record.before.moderation;
+      await ref.set(restored);
+    } else {
+      throw new HttpsError("failed-precondition", "이 작업은 자동 롤백을 지원하지 않습니다.");
+    }
+    const restoredData = record.before;
+    if (restoredData.ownerUid) {
+      const bannedRef = db.collection("banned_users").doc(restoredData.ownerUid);
+      if (restoredData.moderation && restoredData.moderation.status === "banned") {
+        await bannedRef.set({ status: "banned", playerId: record.playerId, reason: restoredData.moderation.reason || "복원된 제재", updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       } else {
         await bannedRef.delete();
       }
     }
-    await writeAudit(uid, "rollback", record.playerId, current.exists ? current.data() : null, record.before, "원본 기록 " + auditId + " 복원");
+    const latest = await ref.get();
+    await writeAudit(uid, "rollback", record.playerId, current.exists ? current.data() : null, latest.exists ? latest.data() : null, "원본 기록 " + auditId + " 복원");
     return { ok: true };
   }
 
