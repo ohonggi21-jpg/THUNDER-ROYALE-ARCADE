@@ -450,7 +450,7 @@ function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join
 function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
 function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
 function renameUI(){A.innerHTML=bar()+`<div class=card><div class=sub>NEW NICKNAME</div><input id=nn maxlength=10 value="${esc(me)}"><button class=btn onclick="renameDo()">바꾸기</button><p id=m class=mut>점수와 기록은 그대로 유지돼요.</p></div>`}
-async async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
+async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
 const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}
 if(db){try{await db.collection('players').doc(n).set(p);if(n!=o)await db.collection('players').doc(o).delete()}catch(e){}}else lsSave();go('menu')}
 const slp=f=>{const s=new Set(f).size;return s==1?[100,85,90,75,75][f[0]]:s==2?50:20};
