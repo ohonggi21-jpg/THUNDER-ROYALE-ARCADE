@@ -227,7 +227,7 @@ async function login(){
    if(P[id]?.moderation?.status==='banned'){alert('이 계정은 정지되었습니다.');return}
    P[id]=P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
    P[id].name=v;if(auth?.currentUser)P[id].ownerUid=auth.currentUser.uid;
-   me=v;ensureDaily(P[id]);await persistPlayer(id);
+   me=v;identityVerified=true;ensureDaily(P[id]);await persistPlayer(id);
    try{localStorage.setItem('trc_me',v)}catch(x){}
    alert('Cloud Functions 배포 전 임시 입장입니다. 자동 제재와 서버 관리자 기능은 백엔드 배포 후 활성화됩니다.');
    render();return;
@@ -268,8 +268,8 @@ async function adminAdjust(k){const field=prompt('변경할 항목을 입력하�
 async function admDel(k){if(!confirm('이 계정을 삭제할까요? 삭제 전 기록은 관리자 로그에 보관되어 롤백할 수 있어요.'))return;try{await adminCall({action:'deletePlayer',playerId:k,reason:'관리자 계정 삭제'});alert('계정을 삭제했어요.');await adminRefreshAudit()}catch(e){alert('계정 삭제 실패: '+(e.message||e))}}
 async function admRollback(id){if(!confirm('이 관리 작업 직전의 계정 데이터로 복원할까요?'))return;try{await adminCall({action:'rollback',auditId:id});alert('계정 데이터를 롤백했어요.');await adminRefreshAudit()}catch(e){alert('롤백 실패: '+(e.message||e))}}
 async function admAll(){alert('전체 초기화는 안전을 위해 이 화면에서 비활성화했어요. 필요한 경우 백업 후 Firebase 콘솔에서 별도 작업해 주세요.')}
-function accountBlocked(){const p=P[pid(me)];if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
-function blockedNickname(name){const n=String(name||'').toLowerCase().replace(/[\\s._-]/g,'');return ['시발','씨발','ㅅㅂ','병신','븅신','개새끼','좆','ㅈㄴ','fuck','shit','bitch','nigger'].some(w=>n.includes(w.replace(/[\\s._-]/g,'')))}
+function accountBlocked(){const p=P[pid(me)];if(authReady&&!identityVerified){alert('계정 서버 인증이 아직 완료되지 않았어요. 잠시 후 다시 시도해 주세요.');return true}if(p?.ownerUid&&auth?.currentUser&&p.ownerUid!==auth.currentUser.uid){alert('이 계정은 다른 기기에 연결되어 있습니다.');return true}if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
+function blockedNickname(name){const n=String(name||'').toLowerCase().replace(/[\s._-]/g,'');return ['시발','씨발','ㅅㅂ','병신','븅신','개새끼','좆','ㅈㄴ','fuck','shit','bitch','nigger'].some(w=>n.includes(w.replace(/[\s._-]/g,'')))}
 async function verifyStoredIdentity(){
  if(identityVerified||!me||!functionsApi||!auth?.currentUser)return;
  const id=pid(me);
@@ -450,7 +450,7 @@ function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join
 function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
 function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
 function renameUI(){A.innerHTML=bar()+`<div class=card><div class=sub>NEW NICKNAME</div><input id=nn maxlength=10 value="${esc(me)}"><button class=btn onclick="renameDo()">바꾸기</button><p id=m class=mut>점수와 기록은 그대로 유지돼요.</p></div>`}
-async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
+async async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
 const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}
 if(db){try{await db.collection('players').doc(n).set(p);if(n!=o)await db.collection('players').doc(o).delete()}catch(e){}}else lsSave();go('menu')}
 const slp=f=>{const s=new Set(f).size;return s==1?[100,85,90,75,75][f[0]]:s==2?50:20};
