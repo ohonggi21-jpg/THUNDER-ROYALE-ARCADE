@@ -124,11 +124,12 @@ input[type=file]{font-size:12px;padding:8px}
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions-compat.js"></script></script>
 <script>
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
-const PIN='7777',$=s=>document.querySelector(s),A=$('#app');
-let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
+const $=s=>document.querySelector(s),A=$('#app');
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
@@ -210,10 +211,10 @@ A.innerHTML=`<div class=hero onclick="tap()"><div class=sub>THE ROYAL ARCADE · 
 ${me?`<div class=two><button class="btn alt" onclick="renameUI()">✏️ 닉네임 변경</button><button class="btn alt" onclick="logout()">다른 닉네임으로 입장</button></div>`:''}
 <div class=foot>${db?'🟢 온라인 데이터 연결':'🟡 이 기기 브라우저 저장'}<br>순위 점수와 경험치는 게임 속 가상 기록이며 현금 가치가 없어요.</div>`}
 function tap(){taps++;setTimeout(()=>taps=0,3000);if(taps>=5){taps=0;au=0;cf=0;view='adm';render()}}
-function login(){const v=$('#nn').value.trim();if(!v)return;me=v;const id=pid(v);if(!P[id])P[id]={name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};else P[id].name=P[id].name||v;ensureDaily(P[id]);persistPlayer(id);try{localStorage.setItem('trc_me',v)}catch(e){}render()}
+function login(){const v=$('#nn').value.trim();if(!v)return;if(blockedNickname(v)){alert('부적절한 닉네임은 사용할 수 없습니다.');return}const id=pid(v);if(P[id]?.moderation?.status==='banned'){alert('이 계정은 정지되었습니다. 사유: '+(P[id].moderation.reason||'운영 정책 위반'));return}me=v;if(!P[id])P[id]={name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};else P[id].name=P[id].name||v;ensureDaily(P[id]);persistPlayer(id);try{localStorage.setItem('trc_me',v)}catch(e){}render()}
 function logout(){me='';try{localStorage.removeItem('trc_me')}catch(e){}render()}
-function startTour(){mode='tour';tour={i:0,r:{}};gid=G[0].id;go('game')}
-function startFree(id){mode=pr?'prac':'free';gid=id;go('game')}
+function startTour(){if(accountBlocked())return;mode='tour';tour={i:0,r:{}};gid=G[0].id;go('game')}
+function startFree(id){if(accountBlocked())return;mode=pr?'prac':'free';gid=id;go('game')}
 function vSel(){const p=P[pid(me)]||{s:{}};A.innerHTML=bar()+`<h2>${pr?'🎈 PRACTICE MODE':'SOLO PLAY · CHOOSE GAME'}</h2><div class=mut>${pr?'연습 모드는 최고 기록·미션·경험치를 저장하지 않아요.':'자유롭게 플레이하고 개인 최고 기록을 갱신하세요.'}</div><div class=two><button class=btn alt onclick="pr=${pr?0:1};vSel()">${pr?'기록 모드로 전환':'🎈 연습 모드로 전환'}</button><button class=btn alt onclick="startTour()">🏅 종합 토너먼트</button></div><div class=grid>${G.map(x=>`<button class=gc onclick="startFree('${x.id}')"><span>${x.ic}</span>${x.n}<small>최고 ${p.s&&p.s[x.id]!=null?p.s[x.id]:'—'}점</small></button>`).join('')}</div><button class=lk onclick="go('guide')">📖 규칙 확인</button>`}
 function vGame(){const x=G.find(a=>a.id==gid);A.innerHTML=bar()+`<div class=card><div class=sub>${mode=='tour'?'TOURNAMENT '+(tour.i+1)+'/6':mode=='prac'?'PRACTICE · 기록 안 됨':'FREE PLAY'}</div><h2>${x.ic} ${x.n}</h2><div class=felt id=S></div></div>`;GM[gid]()}
 async function save(sc,win){const id=pid(me);let p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0,xp:0};p={...p,s:{...p.s}};const old=total(p);ensureDaily(p);
@@ -229,9 +230,24 @@ function vChamp(){const all=champSorted(),l=all.slice(0,champMore?30:10),lead=al
 function vProf(){const p=P[pid(me)]||{s:{}},t=total(p),l=sorted(),top=l[0]&&l[0].name==me;
 const AC=[['🎓 ALL-ROUNDER',played(p)==6],['⚡ 5 STREAK',p.s.hl==100],['7️⃣ JACKPOT',p.s.slot==100],['🂡 NATURAL',p.s.bj==100],['👑 ROYAL FLUSH',p.s.poker==100],['🎯 LUCKY NUMBER',p.s.roulette==100],['🏆 THUNDER GOD',t==600]];
 A.innerHTML=bar()+`<div class="card c"><div class=sub>MY PROFILE</div><div class=big>${esc(me)} ${top?'🏆':''}</div><div class=ok>${title(t)}</div><div class=mut>🏆 트로피 ${(M.hof||[]).filter(h=>h.name==me).length} · ⚔️ 대결 ${p.dw||0}승</div><div class=mut>총점 ${t}/600 · 플레이 ${p.plays||0}회 · 승리 ${p.wins||0}회 · 🪙 ${1000+(p.pts||0)}</div></div><div class=card><div class=sub>BEST SCORES</div><div class=bars>${G.map(x=>`<div class=br><span style="width:120px">${x.ic} ${x.n}</span><i><u style="width:${p.s[x.id]||0}%"></u></i><b>${p.s[x.id]||0}</b></div>`).join('')}</div></div><div class=card><div class=sub>ACHIEVEMENTS</div><div class=badges>${AC.map(a=>`<span class="bd${a[1]?' on':''}">${a[0]}</span>`).join('')}</div></div>`}
-function vAdm(){const e=Object.entries(P);A.innerHTML=bar()+(au?`<div class=card><div class=sub>ADMIN</div>${e.map(([k,p])=>`<div class=rw><span class=nm>${esc(p.name)}<small>${total(p)}점</small></span><button class=lk onclick="admDel('${k}')">삭제</button></div>`).join('')||'<div class=mut>기록 없음</div>'}</div><button class=btn onclick="newSeason()">🏆 시즌 ${M.n} 종료 · 새 시즌 시작</button><button class="btn alt" id=rs onclick="admAll()">전체 기록 초기화</button>`:`<div class=card><div class=sub>ADMIN PIN</div><input id=pin type=password inputmode=numeric maxlength=8><button class=btn onclick="if($('#pin').value==PIN){au=1;render()}">확인</button></div>`)}
-async function admDel(k){delete P[k];if(db){try{await db.collection('players').doc(k).delete()}catch(e){}}else lsSave();render()}
-async function admAll(){if(!cf){cf=1;$('#rs').textContent='한 번 더 누르면 모든 기록이 삭제됩니다';return}for(const k of Object.keys(P))await admDel(k);cf=0}
+async function adminCall(data){if(!functionsApi)throw new Error('Firebase Functions 연결이 아직 준비되지 않았어요.');const call=functionsApi.httpsCallable('adminAction');const result=await call(data);return result.data||{}}
+async function adminLogin(){try{const r=await adminCall({action:'check'});au=1;adminAudit=[];await adminRefreshAudit();alert('서버 관리자 인증 완료 · UID '+r.uid);render()}catch(e){alert('관리자 인증 실패: '+(e.message||e))}}
+async function adminRefreshAudit(){try{const r=await adminCall({action:'listAudit'});adminAudit=r.items||[]}catch(e){adminAudit=[]}}
+function vAdm(){
+ const e=Object.entries(P).sort((a,b)=>String(a[1]?.name||'').localeCompare(String(b[1]?.name||''),'ko'));
+ if(!au){const uid=auth&&auth.currentUser?auth.currentUser.uid:'Firebase 로그인 대기 중';A.innerHTML=bar()+`<div class=card><div class=sub>SECURE ADMIN · SERVER AUTH</div><div class=mut>관리자 권한은 브라우저 PIN이 아니라 Firebase 서버의 UID 허용 목록으로 확인합니다.</div><div class=rw><span class=nm>현재 기기 UID<small id=adminUid>${esc(uid)}</small></span><button class=lk onclick="GenCopyAdminUid()">UID 복사</button></div><div class=mut>이 UID를 functions/.env의 ADMIN_UIDS에 등록하고 Cloud Functions를 배포한 뒤 인증하세요.</div><button class=btn onclick="adminLogin()">서버 관리자 인증</button></div>`;return}
+ A.innerHTML=bar()+`<h2>ADMIN CONTROL CENTER</h2><div class=card><div class=sub>SEASON CONTROL</div><div class=mut>현재 시즌 ${M.n} · 시즌 번호를 낮추거나 높여도 기본적으로 점수는 유지됩니다.</div><input id=adminSeason type=number min=1 max=9999 value="${Number(M.n)||1}" placeholder="시즌 번호"><label class=mut><input id=resetChampionship type=checkbox> 시즌 점수(cp/cw/cd/cl/cm)도 함께 초기화</label><button class=btn onclick="adminSetSeason()">시즌 번호 적용</button><button class="btn alt" onclick="newSeason()">🏆 현재 시즌 종료 후 다음 시즌 시작</button></div><div class=card><div class=sub>PLAYER ACCOUNTS · ${e.length}</div>${e.map(([k,p])=>`<div class=rw style="align-items:flex-start"><span class=nm>${esc(p.name)}<small>ID ${esc(k)} · 솔로 ${total(p)}점 · 챔피언십 ${Number(p.cp)||0}점 · ${esc(p.moderation?.status||'normal')}${p.moderation?.reason?' · '+esc(p.moderation.reason):''}</small></span><span><button class=lk onclick="adminAdjust('${k}')">점수</button><button class=lk onclick="adminSetBan('${k}',${p.moderation?.status==='banned'?'false':'true'})">${p.moderation?.status==='banned'?'해제':'정지'}</button><button class=lk onclick="admDel('${k}')">삭제</button></span></div>`).join('')||'<div class=mut>기록 없음</div>'}</div><div class=card><div class=sub>ADMIN AUDIT · 최근 기록</div><button class="btn alt" onclick="adminRefreshAudit().then(render)">기록 새로고침</button>${adminAudit.map(a=>`<div class=rw><span class=nm>${esc(a.action)} · ${esc(a.playerId||'시즌') }<small>${esc(a.note||'')} · ${a.at?new Date(a.at).toLocaleString('ko-KR'):'시간 정보 없음'}</small></span>${a.canRollback?'<button class=lk onclick="admRollback(\''+a.id+'\')">롤백</button>':''}</div>`).join('')||'<div class=mut>관리 기록이 없습니다.</div>'}</div><button class="btn alt" onclick="au=0;render()">관리자 잠금</button>`;
+}
+function GenCopyAdminUid(){const uid=auth&&auth.currentUser?auth.currentUser.uid:'';if(uid&&navigator.clipboard?.writeText)navigator.clipboard.writeText(uid).then(()=>alert('UID를 복사했어요.')).catch(()=>alert(uid));else alert(uid||'Firebase 로그인 대기 중')}
+async function adminSetSeason(){const season=Number($('#adminSeason')?.value);if(!Number.isInteger(season)||season<1||season>9999)return alert('시즌 번호는 1~9999 사이의 정수로 입력해 주세요.');const reset=!!$('#resetChampionship')?.checked;if(!confirm('시즌 번호를 '+season+'로 변경할까요?'+(reset?' 챔피언십 점수도 초기화합니다.':' 기존 점수는 유지합니다.')))return;try{await adminCall({action:'setSeason',season,resetChampionship:reset});alert('시즌 번호를 변경했어요.');await adminRefreshAudit()}catch(e){alert('시즌 변경 실패: '+(e.message||e))}}
+async function adminSetBan(k,banned){const reason=banned?prompt('정지 사유를 입력해 주세요:','운영 정책 위반'):'관리자 검토 후 정지 해제';if(banned&&reason===null)return;if(!confirm((banned?'계정을 정지':'정지를 해제')+'할까요?'))return;try{await adminCall({action:'setBan',playerId:k,banned,reason});alert('계정 상태를 변경했어요.');await adminRefreshAudit()}catch(e){alert('계정 상태 변경 실패: '+(e.message||e))}}
+async function adminAdjust(k){const field=prompt('변경할 항목을 입력하세요. pts=누적 점수, cp=시즌 점수, xp=경험치, dw=대결 승리, s.게임ID=게임 최고 점수','cp');if(!field)return;const delta=Number(prompt('더하거나 뺄 정수 점수 (예: 50 또는 -20)','50'));if(!Number.isInteger(delta)||Math.abs(delta)>1000000)return alert('정수 -1,000,000~1,000,000으로 입력해 주세요.');const reason=prompt('변경 사유를 입력해 주세요.','관리자 점수 조정')||'';if(!confirm(field+' 항목을 '+(delta>0?'+':'')+delta+' 변경할까요?'))return;try{await adminCall({action:'adjustScore',playerId:k,field,delta,reason});alert('점수를 조정했어요.');await adminRefreshAudit()}catch(e){alert('점수 조정 실패: '+(e.message||e))}}
+async function admDel(k){if(!confirm('이 계정을 삭제할까요? 삭제 전 기록은 관리자 로그에 보관되어 롤백할 수 있어요.'))return;try{await adminCall({action:'deletePlayer',playerId:k,reason:'관리자 계정 삭제'});alert('계정을 삭제했어요.');await adminRefreshAudit()}catch(e){alert('계정 삭제 실패: '+(e.message||e))}}
+async function admRollback(id){if(!confirm('이 관리 작업 직전의 계정 데이터로 복원할까요?'))return;try{await adminCall({action:'rollback',auditId:id});alert('계정 데이터를 롤백했어요.');await adminRefreshAudit()}catch(e){alert('롤백 실패: '+(e.message||e))}}
+async function admAll(){alert('전체 초기화는 안전을 위해 이 화면에서 비활성화했어요. 필요한 경우 백업 후 Firebase 콘솔에서 별도 작업해 주세요.')}
+function accountBlocked(){const p=P[pid(me)];if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
+function blockedNickname(name){const n=String(name||'').toLowerCase().replace(/[\\s._-]/g,'');return ['시발','씨발','ㅅㅂ','병신','븅신','개새끼','좆','ㅈㄴ','fuck','shit','bitch','nigger'].some(w=>n.includes(w.replace(/[\\s._-]/g,'')))}
+
 /* ---- cards ---- */
 const SU='♠♥♦♣',L=r=>({11:'J',12:'Q',13:'K',14:'A'}[r]||r);
 function deck(){const d=[];for(let s=0;s<4;s++)for(let r=2;r<=14;r++)d.push({r,s});for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}return d}
@@ -407,10 +423,10 @@ poker:{n:'POKER',ic:'♠️',roll:()=>deck().slice(0,5),sc:v=>ev(v).t,show:v=>PN
 bj:{n:'BLACKJACK',ic:'🎴',roll:()=>0,sc:v=>[v],show:v=>v==0?'BUST':v==22?'BJ!':v}};
 const dp=r=>`duels/${dq.code}${r}`;
 function dsub(){dq.u=['h','g'].map(r=>db.doc(dp(r)).onSnapshot(s=>{const d=s.exists?s.data():null;if(r==dq.role){if(d&&((d.mid||0)>=dq.mid||(d.next&&d.next.id>dq.mid)))dq.mine=d}else dq.opp=d;dnext();if(view=='duel'&&dq)vDuel()},()=>{}))}
-async function duelNew(game){const code=String(1000+Math.floor(Math.random()*9000));dq={code,role:'h',game,mid:0,sw:{w:0,l:0},mine:{name:me,game,mid:0,rolls:[]},opp:null};try{await db.doc(dp('g')).delete()}catch(e){}try{await db.doc(dp('h')).set(dq.mine)}catch(e){}dsub();vDuel()}
-async function duelJoin(){const code=$('#dc').value.trim();if(code.length!=4)return;let s;try{s=await db.doc(`duels/${code}h`).get()}catch(e){}if(!s||!s.exists){$('#dc').value='';$('#dc').placeholder='방을 찾을 수 없어요';return}
+async function duelNew(game){if(accountBlocked())return;const code=String(1000+Math.floor(Math.random()*9000));dq={code,role:'h',game,mid:0,sw:{w:0,l:0},mine:{name:me,game,mid:0,rolls:[]},opp:null};try{await db.doc(dp('g')).delete()}catch(e){}try{await db.doc(dp('h')).set(dq.mine)}catch(e){}dsub();vDuel()}
+async function duelJoin(){if(accountBlocked())return;const code=$('#dc').value.trim();if(code.length!=4)return;let s;try{s=await db.doc(`duels/${code}h`).get()}catch(e){}if(!s||!s.exists){$('#dc').value='';$('#dc').placeholder='방을 찾을 수 없어요';return}
 dq={code,role:'g',game:s.data().game||'dice',mid:0,sw:{w:0,l:0},mine:{name:me,mid:0,rolls:[]},opp:s.data()};try{await db.doc(dp('g')).set(dq.mine)}catch(e){}dsub();vDuel()}
-async function duelRoll(){if(dq.game=='slot')return slotModal(duelSub);if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}return duelSub(dg().roll())}
+async function duelRoll(){if(accountBlocked())return;if(dq.game=='slot')return slotModal(duelSub);if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}return duelSub(dg().roll())}
 async function duelSub(v){const a=JSON.stringify(v);bp(500,.08,'square');dq.mine={...dq.mine,name:me,game:dq.game,mid:dq.mid,rolls:[...dq.mine.rolls,a]};vDuel();try{await db.doc(dp(dq.role)).set(dq.mine)}catch(e){}}
 async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await db.collection('players').doc(id).set(P[id])}catch(e){}}
 function duelLeave(){if(dq){(dq.u||[]).forEach(u=>u());db.doc(dp(dq.role)).delete().catch(()=>{})}dq=null;go('menu')}
@@ -443,10 +459,11 @@ render();
   try{
     if(!window.firebase) throw new Error('Firebase SDK를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
     if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const auth=firebase.auth();
+    auth=firebase.auth();
     try{await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)}catch(e){console.warn('Auth persistence:',e)}
     if(!auth.currentUser) await auth.signInAnonymously();
     db=firebase.firestore();
+    functionsApi=firebase.functions();
     try{db.settings({ignoreUndefinedProperties:true})}catch(e){}
     db.doc('meta/season').onSnapshot(s=>{
       firebaseError='';
