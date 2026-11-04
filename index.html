@@ -124,7 +124,7 @@ input[type=file]{font-size:12px;padding:8px}
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions-compat.js"></script></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions-compat.js"></script>
 <script>
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
@@ -309,7 +309,7 @@ g.done=1;pkD();const a=ev(g.p),b=ev(g.h),c=cmp(a.t,b.t);finish(PS[a.k],c>0,`${PN
 function fx(sc,w){const s=document.querySelector('.felt');if(!w){s&&s.classList.add('shake');return}const cs=['#ffd34d','#e0475b','#4cd68f','#fff','#6ab7ff'];for(let i=0;i<(sc>=90?70:30);i++){const e=document.createElement('i');e.className='cf';e.style.cssText=`left:${Math.random()*100}vw;background:${cs[i%5]};--x:${Math.random()*160-80}px;animation-delay:${Math.random()*.4}s`;document.body.appendChild(e);setTimeout(()=>e.remove(),2400)}
 if(sc>=90){const b=document.createElement('div');b.className='ban';b.textContent=sc==100?'PERFECT!':'BIG WIN!';document.body.appendChild(b);setTimeout(()=>b.remove(),1500)}}
 const hof=()=>(M.hof&&M.hof.length)?`<div class=card><div class=sub>ROYAL HALL OF FAME</div>${[...M.hof].reverse().map(h=>`<div class=rw><span class=rk>🏆</span><span class=nm>${esc(h.name)}<small>SEASON ${h.s} · ${h.wins!=null?(h.wins+'승 · '+(h.matches||0)+'경기'):'기존 기록'}</small></span><b class=champPts>${pointText(h.points!=null?h.points:h.sc)}점</b></div>`).join('')}</div>`:'';
-async function newSeason(){const l=champSorted(),champ=l[0];M={...M,n:M.n+1,hof:champ?[...(M.hof||[]),{s:M.n,name:champ.name,sc:champ.cp||0,points:champ.cp||0,wins:champ.cw||0,matches:champ.cm||0} ]:(M.hof||[])};for(const k of Object.keys(P)){const p=P[k];P[k]={...p,cp:0,cw:0,cd:0,cl:0,cm:0}}if(db){try{await Promise.all(Object.entries(P).map(([k,p])=>db.collection('players').doc(k).set(p)));await db.doc('meta/season').set(M)}catch(e){lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(x){}}}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}cf=0;champMore=false;render()}
+async function newSeason(){if(!confirm('현재 시즌을 종료하고 시즌 '+((Number(M.n)||1)+1)+'을 시작할까요? 챔피언십 점수는 초기화됩니다.'))return;try{await adminCall({action:'setSeason',season:(Number(M.n)||1)+1,resetChampionship:true});await adminRefreshAudit();cf=0;champMore=false;render()}catch(e){alert('새 시즌 시작 실패: '+(e.message||e))}}
 /* ======== GOLDEN JACKPOT SLOT (보너스: 와일드🃏 · 스캐터💰 · 프리스핀) ======== */
 // [사운드] tn(주파수,길이,파형,볼륨,끝주파수,지연): 스윌/감쇠 지원 톤 생성기
 function tn(f,d,t,v,f2,dl){if(!snd)return;try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state=='suspended')ac.resume();const T=ac.currentTime+(dl||0),o=ac.createOscillator(),g=ac.createGain();o.type=t||'sine';o.frequency.setValueAtTime(f,T);if(f2)o.frequency.exponentialRampToValueAtTime(f2,T+d);g.gain.setValueAtTime(v||.06,T);g.gain.exponentialRampToValueAtTime(.001,T+d);o.connect(g);g.connect(ac.destination);o.start(T);o.stop(T+d)}catch(e){}}
