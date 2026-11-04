@@ -84,6 +84,12 @@ exports.moderatePlayer = onDocumentWritten("players/{playerId}", async event => 
       source: "automatic"
     }
   }, { merge: true });
+  if (player.ownerUid) {
+    await db.collection("banned_users").doc(player.ownerUid).set({
+      status: "banned", playerId: event.params.playerId, reason,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
 
   await db.collection("admin_audit").add({
     actorUid: "system",
@@ -94,6 +100,35 @@ exports.moderatePlayer = onDocumentWritten("players/{playerId}", async event => 
     after: { name: player.name || "", status: "banned" },
     at: admin.firestore.FieldValue.serverTimestamp()
   });
+});
+
+exports.claimPlayer = onCall(async request => {
+  const uid = requireAuth(request);
+  const blockedUid = await db.collection("banned_users").doc(uid).get();
+  if (blockedUid.exists) throw new HttpsError("permission-denied", "이 기기는 운영 정책 위반으로 이용이 정지되었습니다.");
+  const data = request.data || {};
+  const id = String(data.playerId || "");
+  const name = String(data.name || "").trim().slice(0, 10);
+  const ref = playerRef(id);
+  if (!name || isBlockedName(name)) throw new HttpsError("invalid-argument", "사용할 수 없는 닉네임입니다.");
+  let player;
+  await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const current = snap.exists ? snap.data() : null;
+    if (current && current.moderation && current.moderation.status === "banned") {
+      throw new HttpsError("permission-denied", "정지된 계정입니다.");
+    }
+    if (current && current.ownerUid && current.ownerUid !== uid) {
+      throw new HttpsError("already-exists", "이 닉네임은 다른 기기에 연결되어 있습니다.");
+    }
+    player = {
+      ...(current || { s: {}, wins: 0, plays: 0, pts: 0, t: 0, xp: 0 }),
+      name,
+      ownerUid: uid
+    };
+    tx.set(ref, player);
+  });
+  return { ok: true, player };
 });
 
 exports.adminAction = onCall(async request => {
@@ -148,6 +183,11 @@ exports.adminAction = onCall(async request => {
         : { status: "clear", reason: "", clearedAt: admin.firestore.FieldValue.serverTimestamp(), source: "admin" }
     };
     await ref.set(after);
+    if (before.ownerUid) {
+      const bannedRef = db.collection("banned_users").doc(before.ownerUid);
+      if (data.banned) await bannedRef.set({ status: "banned", playerId: id, reason: after.moderation.reason, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      else await bannedRef.delete();
+    }
     await writeAudit(uid, action, id, before, after, data.reason);
     return { ok: true };
   }
@@ -191,6 +231,14 @@ exports.adminAction = onCall(async request => {
     const ref = playerRef(record.playerId);
     const current = await ref.get();
     await ref.set(record.before);
+    if (record.before.ownerUid) {
+      const bannedRef = db.collection("banned_users").doc(record.before.ownerUid);
+      if (record.before.moderation && record.before.moderation.status === "banned") {
+        await bannedRef.set({ status: "banned", playerId: record.playerId, reason: record.before.moderation.reason || "복원된 제재", updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      } else {
+        await bannedRef.delete();
+      }
+    }
     await writeAudit(uid, "rollback", record.playerId, current.exists ? current.data() : null, record.before, "원본 기록 " + auditId + " 복원");
     return { ok: true };
   }
