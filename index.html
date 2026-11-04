@@ -129,7 +129,7 @@ input[type=file]{font-size:12px;padding:8px}
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
 const $=s=>document.querySelector(s),A=$('#app');
-let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,authReady=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
@@ -211,7 +211,19 @@ A.innerHTML=`<div class=hero onclick="tap()"><div class=sub>THE ROYAL ARCADE · 
 ${me?`<div class=two><button class="btn alt" onclick="renameUI()">✏️ 닉네임 변경</button><button class="btn alt" onclick="logout()">다른 닉네임으로 입장</button></div>`:''}
 <div class=foot>${db?'🟢 온라인 데이터 연결':'🟡 이 기기 브라우저 저장'}<br>순위 점수와 경험치는 게임 속 가상 기록이며 현금 가치가 없어요.</div>`}
 function tap(){taps++;setTimeout(()=>taps=0,3000);if(taps>=5){taps=0;au=0;cf=0;view='adm';render()}}
-function login(){const v=$('#nn').value.trim();if(!v)return;if(blockedNickname(v)){alert('부적절한 닉네임은 사용할 수 없습니다.');return}const id=pid(v);if(P[id]?.moderation?.status==='banned'){alert('이 계정은 정지되었습니다. 사유: '+(P[id].moderation.reason||'운영 정책 위반'));return}me=v;if(!P[id])P[id]={name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};else P[id].name=P[id].name||v;ensureDaily(P[id]);persistPlayer(id);try{localStorage.setItem('trc_me',v)}catch(e){}render()}
+async function login(){
+ const v=$('#nn').value.trim();if(!v)return;
+ if(blockedNickname(v)){alert('부적절한 닉네임은 사용할 수 없습니다.');return}
+ if(!authReady||!functionsApi||!auth?.currentUser){alert('Firebase 로그인 준비 중이에요. 잠시 후 다시 시도해 주세요.');return}
+ const id=pid(v);
+ try{
+  const claim=await functionsApi.httpsCallable('claimPlayer')({playerId:id,name:v});
+  P[id]=claim.data.player||P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
+  me=v;ensureDaily(P[id]);await persistPlayer(id);
+  try{localStorage.setItem('trc_me',v)}catch(e){}
+  render();
+ }catch(e){alert('입장할 수 없습니다: '+(e.message||e));}
+}
 function logout(){me='';try{localStorage.removeItem('trc_me')}catch(e){}render()}
 function startTour(){if(accountBlocked())return;mode='tour';tour={i:0,r:{}};gid=G[0].id;go('game')}
 function startFree(id){if(accountBlocked())return;mode=pr?'prac':'free';gid=id;go('game')}
@@ -464,6 +476,7 @@ render();
     if(!auth.currentUser) await auth.signInAnonymously();
     db=firebase.firestore();
     functionsApi=firebase.functions();
+    authReady=true;
     try{db.settings({ignoreUndefinedProperties:true})}catch(e){}
     db.doc('meta/season').onSnapshot(s=>{
       firebaseError='';
