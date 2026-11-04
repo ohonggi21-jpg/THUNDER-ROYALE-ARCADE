@@ -222,7 +222,18 @@ async function login(){
   me=v;ensureDaily(P[id]);await persistPlayer(id);
   try{localStorage.setItem('trc_me',v)}catch(e){}
   render();
- }catch(e){alert('입장할 수 없습니다: '+(e.message||e));}
+ }catch(e){
+  if(e.code==='functions/not-found'){
+   if(P[id]?.moderation?.status==='banned'){alert('이 계정은 정지되었습니다.');return}
+   P[id]=P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
+   P[id].name=v;if(auth?.currentUser)P[id].ownerUid=auth.currentUser.uid;
+   me=v;ensureDaily(P[id]);await persistPlayer(id);
+   try{localStorage.setItem('trc_me',v)}catch(x){}
+   alert('Cloud Functions 배포 전 임시 입장입니다. 자동 제재와 서버 관리자 기능은 백엔드 배포 후 활성화됩니다.');
+   render();return;
+  }
+  alert('입장할 수 없습니다: '+(e.message||e));
+ }
 }
 function logout(){me='';try{localStorage.removeItem('trc_me')}catch(e){}render()}
 function startTour(){if(accountBlocked())return;mode='tour';tour={i:0,r:{}};gid=G[0].id;go('game')}
