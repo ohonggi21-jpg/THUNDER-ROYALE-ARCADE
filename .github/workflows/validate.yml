@@ -1,0 +1,27 @@
+name: Validate game and Firebase backend
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check Cloud Functions syntax
+        run: node --check functions/index.js
+      - name: Check browser game script syntax
+        run: |
+          python3 - <<'PY'
+          import re
+          html = open("index.html", encoding="utf-8").read()
+          scripts = re.findall(r"<script>([\\s\\S]*?)</script>", html)
+          if not scripts:
+              raise SystemExit("Inline game script was not found")
+          open("/tmp/thunder-royale-game.js", "w", encoding="utf-8").write(scripts[-1])
+          PY
+          node --check /tmp/thunder-royale-game.js
