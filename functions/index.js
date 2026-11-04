@@ -116,7 +116,8 @@ exports.adminAction = onCall(async request => {
           playerId: d.playerId || "",
           note: d.note || "",
           actorUid: d.actorUid || "",
-          at: d.at && d.at.toMillis ? d.at.toMillis() : null
+          at: d.at && d.at.toMillis ? d.at.toMillis() : null,
+          canRollback: !!d.before && !!d.playerId
         };
       })
     };
@@ -205,11 +206,25 @@ exports.adminAction = onCall(async request => {
     const after = { ...before, n: season, seasonAdjustedAt: admin.firestore.FieldValue.serverTimestamp() };
     if (data.resetChampionship === true) {
       const players = await db.collection("players").get();
-      const batch = db.batch();
-      players.docs.forEach(doc => batch.set(doc.ref, {
-        cp: 0, cw: 0, cd: 0, cl: 0, cm: 0
-      }, { merge: true }));
-      await batch.commit();
+      const ranked = players.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(p => (Number(p.cm) || 0) > 0)
+        .sort((a, b) => (Number(b.cp) || 0) - (Number(a.cp) || 0));
+      const champion = ranked[0];
+      if (season !== (Number(before.n) || 1) && champion) {
+        after.hof = [
+          ...(Array.isArray(before.hof) ? before.hof : []),
+          { s: Number(before.n) || 1, name: champion.name || "Unknown", points: Number(champion.cp) || 0,
+            wins: Number(champion.cw) || 0, matches: Number(champion.cm) || 0 }
+        ];
+      }
+      for (let i = 0; i < players.docs.length; i += 450) {
+        const batch = db.batch();
+        players.docs.slice(i, i + 450).forEach(doc => batch.set(doc.ref, {
+          cp: 0, cw: 0, cd: 0, cl: 0, cm: 0
+        }, { merge: true }));
+        await batch.commit();
+      }
     }
     await metaRef.set(after);
     await writeAudit(uid, "setSeason", null, before, after,
