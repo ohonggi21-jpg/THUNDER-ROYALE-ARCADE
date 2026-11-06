@@ -293,6 +293,7 @@ async function adminAction(request, env, action, data) {
     if(!log.player_id)throw new Error("복원 가능한 플레이어 변경 기록이 아닙니다.");
     const playerId=log.player_id,playerPath="players/"+playerId;
     const currentDoc=await firestoreGet(env,token,playerPath),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
+    if(!currentDoc&&log.action!=="deletePlayer")throw new Error("현재 플레이어 문서가 없어 이 변경은 안전하게 롤백할 수 없습니다.");
     let next;
     if(log.action==="deletePlayer"){
       await clearPlayerDeleted(env,token,playerId);
@@ -335,7 +336,7 @@ export default {
     try {
       if (request.method==="GET" && url.pathname==="/health") {
         const row=await env.DB.prepare("SELECT 1 AS ok").first();
-        return json({ok:!!row,service:"thunder-royale-api",database:"connected"});
+        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"admin-fix-2026-11-07-v2"});
       }
       if (request.method!=="POST" || !url.pathname.startsWith("/admin/")) return json({error:"Not found"},404);
       const data=await request.json();
