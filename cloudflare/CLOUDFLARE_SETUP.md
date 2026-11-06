@@ -4,6 +4,7 @@ This folder is a staged backend migration. It does NOT switch the live game away
 
 ## Files
 - `worker.js`: Cloudflare Worker API. Uses Firebase Anonymous Auth ID tokens for identity and a server-side `ADMIN_UIDS` secret for admin authorization.
+- The administrator page includes a separate D1 backup-staging control; this does not change the live Firebase game data.
 - `schema.sql`: D1 schema.
 - `CLOUDFLARE_SETUP.md`: setup and safety notes.
 
@@ -18,7 +19,7 @@ This folder is a staged backend migration. It does NOT switch the live game away
 
 ## Importing the game backup
 The live game still reads and writes Firebase. Do not switch it yet.
-After the Worker is deployed and tested, the administrator can send the JSON backup to the authenticated endpoint `POST /admin/importBackup`. This endpoint merges/overwrites matching player IDs in D1 and imports the season metadata. It does not delete any existing D1 records.
+After the updated Worker is deployed and tested, use the administrator page in the game to select the downloaded JSON backup. The page sends it to the authenticated `POST /admin/importBackup` endpoint. The import is insert-only: it runs only when the D1 `players` table and `meta/season` row are empty. If either already contains data, the request is rejected without overwriting existing records. This creates a staged D1 copy only; the live game continues reading and writing Firebase until the later migration is completed.
 
 ## Current limitations
 - This is phase 1: secure Worker foundation, D1 schema, backup import, and basic server-side admin actions.
