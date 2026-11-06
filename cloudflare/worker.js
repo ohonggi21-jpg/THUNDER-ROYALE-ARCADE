@@ -49,7 +49,7 @@ async function getFirebaseJwks() {
 
 async function verifyFirebase(request, env) {
   const authHeader = request.headers.get("Authorization") || "";
-  const bearerMatch = authHeader.match(/^Bearer\\s+(.+)$/i);
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!bearerMatch) throw new Error("Firebase 로그인 토큰이 Authorization Bearer 헤더에 없습니다.");
   const token = bearerMatch[1].trim();
   const parts = token.split(".");
