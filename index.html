@@ -510,18 +510,14 @@ render();
       if(['menu','rank','prof','adm','champ','tv'].includes(view))render();
     },firebaseConnectionError);
     db.collection('players').onSnapshot(s=>{
-      const localPlayers=lsLoad(),remotePlayers={};
+      // Firestore is authoritative while online. Never recreate documents merely
+      // because they still exist in this browser's older local cache.
+      const remotePlayers={};
       s.docs.forEach(d=>remotePlayers[d.id]=d.data());
-      P={...localPlayers,...remotePlayers};
+      P=remotePlayers;
       onlinePlayersReady=true;
       migrateOnlineOnlyScores();
-      const missingIds=Object.keys(localPlayers).filter(id=>!remotePlayers[id]);
-      if(missingIds.length){
-        Promise.all(missingIds.map(id=>db.collection('players').doc(id).set(P[id])))
-          .then(()=>verifyStoredIdentity()).catch(firebaseConnectionError);
-      }else{
-        verifyStoredIdentity();
-      }
+      verifyStoredIdentity();
       lsSave();
       if(['menu','rank','prof','adm','tv','champ'].includes(view))render();
     },firebaseConnectionError);
