@@ -44,21 +44,27 @@ async function adminAction(request, env, action, data) {
     return { ok: true, uid, season: Number(meta.n) || 1 };
   }
   if (action === "importBackup") {
+    if (!["THUNDER ROYALE ARCADE", "THUNDER ROYALE CASINO"].includes(data.app)) throw new Error("지원하지 않는 백업 게임입니다.");
     const players = data.players;
-    if (!players || typeof players !== "object" || Array.isArray(players) || Object.keys(players).length > 5000) throw new Error("백업의 플레이어 데이터 형식이 올바르지 않습니다.");
-    let imported = 0;
+    if (!players || typeof players !== "object" || Array.isArray(players) || Object.keys(players).length < 1 || Object.keys(players).length > 5000) throw new Error("백업의 플레이어 데이터 형식이 올바르지 않습니다.");
+    if (!data.meta || typeof data.meta !== "object" || Array.isArray(data.meta)) throw new Error("백업의 시즌 데이터가 올바르지 않습니다.");
     for (const [id, player] of Object.entries(players)) {
-      if (!validId(id) || !player || typeof player !== "object") continue;
-      await db.prepare("INSERT INTO players(id,data_json,updated_at) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at")
-        .bind(id, JSON.stringify(player), Date.now()).run();
-      imported++;
+      if (!validId(id) || !player || typeof player !== "object" || Array.isArray(player)) throw new Error("백업에 올바르지 않은 플레이어 항목이 있습니다: " + id);
     }
-    if (data.meta && typeof data.meta === "object") {
-      await db.prepare("INSERT INTO meta(key,value_json,updated_at) VALUES('season',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at")
-        .bind(JSON.stringify(data.meta), Date.now()).run();
-    }
-    await audit(db, uid, "importBackup", null, null, { imported }, "사용자 백업 JSON 가져오기");
-    return { ok: true, imported };
+    const existing = await db.prepare("SELECT COUNT(*) AS count FROM players").first();
+    const existingMeta = await db.prepare("SELECT key FROM meta WHERE key='season'").first();
+    if ((Number(existing && existing.count) || 0) > 0 || existingMeta) throw new Error("D1에 이미 데이터가 있어 가져오기를 중단했습니다. 기존 데이터를 덮어쓰지 않았습니다.");
+    const now = Date.now();
+    const statements = Object.entries(players).map(([id, player]) =>
+      db.prepare("INSERT INTO players(id,data_json,updated_at) VALUES(?,?,?)").bind(id, JSON.stringify(player), now)
+    );
+    statements.push(
+      db.prepare("INSERT INTO meta(key,value_json,updated_at) VALUES('season',?,?)").bind(JSON.stringify(data.meta), now),
+      db.prepare("INSERT INTO admin_audit(actor_uid,action,player_id,note,before_json,after_json,details_json,created_at) VALUES(?,?,?,?,?,?,?,?)")
+        .bind(uid, "importBackup", null, "사용자 백업 JSON D1 보관", null, null, JSON.stringify({ imported: Object.keys(players).length, version: data.version || null }), now)
+    );
+    await db.batch(statements);
+    return { ok: true, imported: Object.keys(players).length, season: Number(data.meta.n) || 1 };
   }
   if (action === "listPlayers") {
     const rows = await db.prepare("SELECT id,data_json FROM players ORDER BY updated_at DESC LIMIT 500").all();
