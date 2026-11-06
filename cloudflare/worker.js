@@ -49,64 +49,98 @@ async function getFirebaseJwks() {
 
 async function verifyFirebase(request, env) {
   const authHeader = request.headers.get("Authorization") || "";
-  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const bearerMatch = authHeader.match(/^Bearer\\s+(.+)$/i);
   if (!bearerMatch) throw new Error("Firebase 로그인 토큰이 Authorization Bearer 헤더에 없습니다.");
   const token = bearerMatch[1].trim();
-
   const parts = token.split(".");
-  if (parts.length !== 3 || parts.some(part => !part)) {
-    throw new Error("Firebase 로그인 토큰 형식이 올바르지 않습니다.");
-  }
-
+  if (parts.length !== 3 || parts.some(part => !part)) throw new Error("Firebase 로그인 토큰 형식이 올바르지 않습니다.");
   const header = decodeJwtJson(parts[0], "헤더");
   const payload = decodeJwtJson(parts[1], "본문");
-
-  if (header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) {
-    throw new Error("Firebase 로그인 토큰 서명 정보가 올바르지 않습니다.");
-  }
-
+  if (header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) throw new Error("Firebase 로그인 토큰 서명 정보가 올바르지 않습니다.");
   const now = Math.floor(Date.now() / 1000);
   const projectId = String(env.FIREBASE_PROJECT_ID || "").trim();
-  if (!projectId || payload.aud !== projectId ||
-      payload.iss !== "https://securetoken.google.com/" + projectId ||
+  if (!projectId || payload.aud !== projectId || payload.iss !== "https://securetoken.google.com/" + projectId ||
       typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 128 ||
       typeof payload.exp !== "number" || payload.exp <= now ||
       typeof payload.iat !== "number" || payload.iat > now + 300) {
     throw new Error("Firebase 로그인 토큰이 만료되었거나 프로젝트 정보가 일치하지 않습니다.");
   }
-
   const keys = await getFirebaseJwks();
   const jwk = keys.find(key => key.kid === header.kid && key.kty === "RSA");
-  if (!jwk) {
-    firebaseJwksCache = null;
-    firebaseJwksCacheUntil = 0;
-    throw new Error("Firebase 로그인 서명 키를 찾을 수 없습니다. 다시 인증해 주세요.");
-  }
-
+  if (!jwk) { firebaseJwksCache = null; firebaseJwksCacheUntil = 0; throw new Error("Firebase 로그인 서명 키를 찾을 수 없습니다. 다시 인증해 주세요."); }
   let valid = false;
   try {
-    const publicKey = await crypto.subtle.importKey(
-      "jwk", jwk,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false, ["verify"]
-    );
-    valid = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5", publicKey,
-      base64UrlBytes(parts[2]),
-      new TextEncoder().encode(parts[0] + "." + parts[1])
-    );
-  } catch (_) {
-    throw new Error("Firebase 로그인 토큰 서명을 확인하지 못했습니다.");
-  }
+    const publicKey = await crypto.subtle.importKey("jwk", jwk, { name:"RSASSA-PKCS1-v1_5", hash:"SHA-256" }, false, ["verify"]);
+    valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, base64UrlBytes(parts[2]), new TextEncoder().encode(parts[0]+"."+parts[1]));
+  } catch (_) { throw new Error("Firebase 로그인 토큰 서명을 확인하지 못했습니다."); }
   if (!valid) throw new Error("Firebase 로그인 토큰 서명이 유효하지 않습니다.");
-  return payload.sub;
+  return { uid: payload.sub, token, projectId };
 }
-
 async function requireAdmin(request, env) {
-  const uid = await verifyFirebase(request, env);
+  const identity = await verifyFirebase(request, env);
   const allowed = String(env.ADMIN_UIDS || "").split(",").map(x => x.trim()).filter(Boolean);
-  if (!allowed.includes(uid)) throw new Error("관리자 권한이 없습니다.");
-  return uid;
+  if (!allowed.includes(identity.uid)) throw new Error("관리자 권한이 없습니다.");
+  return identity;
+}
+function firestoreValue(v) {
+  if (v === null) return { nullValue:"NULL_VALUE" };
+  if (typeof v === "boolean") return { booleanValue:v };
+  if (typeof v === "number") return Number.isInteger(v) ? { integerValue:String(v) } : { doubleValue:v };
+  if (typeof v === "string") return { stringValue:v };
+  if (Array.isArray(v)) return { arrayValue:{ values:v.map(firestoreValue) } };
+  if (typeof v === "object") {
+    const fields={}; for (const [k,x] of Object.entries(v)) fields[k]=firestoreValue(x);
+    return { mapValue:{ fields } };
+  }
+  return { nullValue:"NULL_VALUE" };
+}
+function fromFirestoreValue(v) {
+  if ("nullValue" in v) return null;
+  if ("booleanValue" in v) return v.booleanValue;
+  if ("integerValue" in v) return Number(v.integerValue);
+  if ("doubleValue" in v) return Number(v.doubleValue);
+  if ("stringValue" in v) return v.stringValue;
+  if ("timestampValue" in v) return v.timestampValue;
+  if ("arrayValue" in v) return (v.arrayValue.values||[]).map(fromFirestoreValue);
+  if ("mapValue" in v) return Object.fromEntries(Object.entries(v.mapValue.fields||{}).map(([k,x])=>[k,fromFirestoreValue(x)]));
+  return null;
+}
+function decodeFirestoreDoc(doc) {
+  return Object.fromEntries(Object.entries(doc.fields||{}).map(([k,v])=>[k,fromFirestoreValue(v)]));
+}
+function firestoreBase(env) {
+  const project=String(env.FIREBASE_PROJECT_ID||"").trim();
+  if (!project) throw new Error("FIREBASE_PROJECT_ID 설정이 없습니다.");
+  return "https://firestore.googleapis.com/v1/projects/"+encodeURIComponent(project)+"/databases/(default)/documents/";
+}
+async function firestoreRequest(env, token, path, options={}) {
+  const response=await fetch(firestoreBase(env)+path,{...options,headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",...(options.headers||{})}});
+  const raw=await response.text(); let body={}; try{body=raw?JSON.parse(raw):{}}catch(_){}
+  if(!response.ok) {
+    const msg=body.error&&body.error.message?body.error.message:("Firestore 요청 실패 · HTTP "+response.status);
+    throw new Error(msg.slice(0,500));
+  }
+  return body;
+}
+async function firestoreGet(env,token,path) {
+  const response=await fetch(firestoreBase(env)+path,{headers:{Authorization:"Bearer "+token}});
+  if(response.status===404)return null;
+  const raw=await response.text();let body={};try{body=raw?JSON.parse(raw):{}}catch(_){}
+  if(!response.ok)throw new Error((body.error&&body.error.message)||("Firestore 조회 실패 · HTTP "+response.status));
+  return body;
+}
+async function firestoreSet(env,token,path,value,previous={}) {
+  const fields={};for(const [k,v] of Object.entries(value))fields[k]=firestoreValue(v);
+  const oldKeys=Object.keys(previous||{}),newKeys=Object.keys(value||{});
+  const masks=[...new Set([...oldKeys,...newKeys])];
+  const qs=masks.map(k=>"updateMask.fieldPaths="+encodeURIComponent(k)).join("&");
+  const suffix=qs?"?"+qs:"";
+  return firestoreRequest(env,token,path+suffix,{method:"PATCH",body:JSON.stringify({fields})});
+}
+async function firestoreDelete(env,token,path) {
+  const response=await fetch(firestoreBase(env)+path,{method:"DELETE",headers:{Authorization:"Bearer "+token}});
+  if(response.status===404)return;
+  if(!response.ok){const raw=await response.text();throw new Error("Firestore 삭제 실패 · HTTP "+response.status+" "+raw.slice(0,300));}
 }
 
 async function audit(db, actor, action, playerId, before, after, note="", details={}) {
@@ -115,89 +149,92 @@ async function audit(db, actor, action, playerId, before, after, note="", detail
 }
 
 async function adminAction(request, env, action, data) {
-  const uid = await requireAdmin(request, env), db = env.DB;
-  if (action === "check") {
-    const row = await db.prepare("SELECT value_json FROM meta WHERE key='season'").first();
-    const meta = row ? JSON.parse(row.value_json) : { n: 1, hof: [], history: [] };
-    return { ok: true, uid, season: Number(meta.n) || 1 };
+  const identity=await requireAdmin(request,env), uid=identity.uid, token=identity.token, db=env.DB;
+  if (action==="check") {
+    const doc=await firestoreGet(env,token,"meta/season");
+    const meta=doc?decodeFirestoreDoc(doc):{n:1,hof:[],history:[]};
+    return {ok:true,uid,season:Number(meta.n)||1};
   }
-  if (action === "importBackup") {
-    if (!["THUNDER ROYALE ARCADE", "THUNDER ROYALE CASINO"].includes(data.app)) throw new Error("지원하지 않는 백업 게임입니다.");
-    const players = data.players;
-    if (!players || typeof players !== "object" || Array.isArray(players) || Object.keys(players).length < 1 || Object.keys(players).length > 5000) throw new Error("백업의 플레이어 데이터 형식이 올바르지 않습니다.");
-    if (!data.meta || typeof data.meta !== "object" || Array.isArray(data.meta)) throw new Error("백업의 시즌 데이터가 올바르지 않습니다.");
-    for (const [id, player] of Object.entries(players)) {
-      if (!validId(id) || !player || typeof player !== "object" || Array.isArray(player)) throw new Error("백업에 올바르지 않은 플레이어 항목이 있습니다: " + id);
-    }
-    const existing = await db.prepare("SELECT COUNT(*) AS count FROM players").first();
-    const existingMeta = await db.prepare("SELECT key FROM meta WHERE key='season'").first();
-    if ((Number(existing && existing.count) || 0) > 0 || existingMeta) throw new Error("D1에 이미 데이터가 있어 가져오기를 중단했습니다. 기존 데이터를 덮어쓰지 않았습니다.");
-    const now = Date.now();
-    const statements = Object.entries(players).map(([id, player]) =>
-      db.prepare("INSERT INTO players(id,data_json,updated_at) VALUES(?,?,?)").bind(id, JSON.stringify(player), now)
-    );
-    statements.push(
-      db.prepare("INSERT INTO meta(key,value_json,updated_at) VALUES('season',?,?)").bind(JSON.stringify(data.meta), now),
-      db.prepare("INSERT INTO admin_audit(actor_uid,action,player_id,note,before_json,after_json,details_json,created_at) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(uid, "importBackup", null, "사용자 백업 JSON D1 보관", null, null, JSON.stringify({ imported: Object.keys(players).length, version: data.version || null }), now)
-    );
-    await db.batch(statements);
-    return { ok: true, imported: Object.keys(players).length, season: Number(data.meta.n) || 1 };
+  if (action==="importBackup") {
+    if (!["THUNDER ROYALE ARCADE","THUNDER ROYALE CASINO"].includes(data.app)) throw new Error("지원하지 않는 백업 게임입니다.");
+    const players=data.players;
+    if (!players||typeof players!=="object"||Array.isArray(players)||Object.keys(players).length<1||Object.keys(players).length>5000) throw new Error("백업의 플레이어 데이터 형식이 올바르지 않습니다.");
+    if (!data.meta||typeof data.meta!=="object"||Array.isArray(data.meta)) throw new Error("백업의 시즌 데이터가 올바르지 않습니다.");
+    for(const [id,p] of Object.entries(players))if(!validId(id)||!p||typeof p!=="object"||Array.isArray(p))throw new Error("백업에 올바르지 않은 플레이어 항목이 있습니다: "+id);
+    const existing=await db.prepare("SELECT COUNT(*) AS count FROM players").first();
+    const existingMeta=await db.prepare("SELECT key FROM meta WHERE key='season'").first();
+    if((Number(existing&&existing.count)||0)>0||existingMeta)throw new Error("D1에 이미 데이터가 있어 가져오기를 중단했습니다. 기존 데이터를 덮어쓰지 않았습니다.");
+    const now=Date.now(),statements=Object.entries(players).map(([id,p])=>db.prepare("INSERT INTO players(id,data_json,updated_at) VALUES(?,?,?)").bind(id,JSON.stringify(p),now));
+    statements.push(db.prepare("INSERT INTO meta(key,value_json,updated_at) VALUES('season',?,?)").bind(JSON.stringify(data.meta),now));
+    statements.push(db.prepare("INSERT INTO admin_audit(actor_uid,action,player_id,note,before_json,after_json,details_json,created_at) VALUES(?,?,?,?,?,?,?,?)").bind(uid,"importBackup",null,"사용자 백업 JSON D1 보관",null,null,JSON.stringify({imported:Object.keys(players).length,version:data.version||null}),now));
+    await db.batch(statements);return {ok:true,imported:Object.keys(players).length,season:Number(data.meta.n)||1};
   }
-  if (action === "listPlayers") {
-    const rows = await db.prepare("SELECT id,data_json FROM players ORDER BY updated_at DESC LIMIT 500").all();
-    return { items: (rows.results || []).map(r => ({ id:r.id, player:JSON.parse(r.data_json) })) };
+  if(action==="listAudit"){
+    const rows=await db.prepare("SELECT id,actor_uid,action,player_id,note,created_at FROM admin_audit ORDER BY id DESC LIMIT 40").all();
+    return {items:rows.results||[]};
   }
-  if (action === "listAudit") {
-    const rows = await db.prepare("SELECT id,actor_uid,action,player_id,note,created_at FROM admin_audit ORDER BY id DESC LIMIT 40").all();
-    return { items: rows.results || [] };
+  if(action==="listPlayers"){
+    const response=await firestoreRequest(env,token,"players");
+    return {items:(response.documents||[]).map(doc=>({id:doc.name.split("/").pop(),player:decodeFirestoreDoc(doc)}))};
   }
-  if (action === "setSeason") {
-    const season = Number(data.season);
-    if (!Number.isInteger(season) || season < 1 || season > 9999) throw new Error("시즌 번호는 1~9999 사이의 정수여야 합니다.");
-    const row = await db.prepare("SELECT value_json FROM meta WHERE key='season'").first();
-    const before = row ? JSON.parse(row.value_json) : { n:1, hof:[], history:[] };
-    const after = { ...before, n:season, seasonAdjustedAt:Date.now() };
-    if (data.resetChampionship === true) {
-      const rows = await db.prepare("SELECT id,data_json FROM players").all();
-      const ranked = (rows.results || []).map(r=>({id:r.id,...JSON.parse(r.data_json)})).filter(p=>(Number(p.cm)||0)>0).sort((a,b)=>(Number(b.cp)||0)-(Number(a.cp)||0));
-      const champion = ranked[0];
-      if (season !== (Number(before.n)||1) && champion) after.hof=[...(Array.isArray(before.hof)?before.hof:[]),{s:Number(before.n)||1,name:champion.name||"Unknown",points:Number(champion.cp)||0,wins:Number(champion.cw)||0,matches:Number(champion.cm)||0}];
-      for (const r of rows.results || []) {
-        const p=JSON.parse(r.data_json); Object.assign(p,{cp:0,cw:0,cd:0,cl:0,cm:0});
-        await db.prepare("UPDATE players SET data_json=?,updated_at=? WHERE id=?").bind(JSON.stringify(p),Date.now(),r.id).run();
+  if(action==="setSeason"){
+    const season=Number(data.season);
+    if(!Number.isInteger(season)||season<1||season>9999)throw new Error("시즌 번호는 1~9999 사이의 정수여야 합니다.");
+    const path="meta/season",doc=await firestoreGet(env,token,path);
+    const before=doc?decodeFirestoreDoc(doc):{n:1,hof:[],history:[]};
+    const after={...before,n:season,seasonAdjustedAt:Date.now()};
+    if(data.resetChampionship===true){
+      const response=await firestoreRequest(env,token,"players");
+      const docs=response.documents||[];
+      const ranked=docs.map(d=>({id:d.name.split("/").pop(),...decodeFirestoreDoc(d)})).filter(p=>(Number(p.cm)||0)>0).sort((a,b)=>(Number(b.cp)||0)-(Number(a.cp)||0));
+      const champ=ranked[0];
+      if(season!==(Number(before.n)||1)&&champ)after.hof=[...(Array.isArray(before.hof)?before.hof:[]),{s:Number(before.n)||1,name:champ.name||"Unknown",points:Number(champ.cp)||0,wins:Number(champ.cw)||0,matches:Number(champ.cm)||0}];
+      for(const d of docs){
+        const p=decodeFirestoreDoc(d),reset={...p,cp:0,cw:0,cd:0,cl:0,cm:0};
+        await firestoreSet(env,token,"players/"+d.name.split("/").pop(),reset,p);
       }
     }
-    await db.prepare("INSERT INTO meta(key,value_json,updated_at) VALUES('season',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at").bind(JSON.stringify(after),Date.now()).run();
-    await audit(db,uid,action,null,before,after,"시즌 번호 변경");
-    return { ok:true, season };
+    await firestoreSet(env,token,path,after,before);
+    await audit(db,uid,action,null,before,after,"Firebase 시즌 번호 변경");
+    return {ok:true,season,meta:after};
   }
   const id=String(data.playerId||"");
-  if (!validId(id)) throw new Error("잘못된 계정 ID입니다.");
-  const row=await db.prepare("SELECT data_json FROM players WHERE id=?").bind(id).first();
-  if (!row) throw new Error("계정을 찾을 수 없습니다.");
-  const before=JSON.parse(row.data_json);
-  if (action==="deletePlayer") {
-    await audit(db,uid,action,id,before,null,data.reason);
-    await db.prepare("DELETE FROM players WHERE id=?").bind(id).run();
-    return {ok:true};
+  if(!validId(id))throw new Error("잘못된 계정 ID입니다.");
+  const path="players/"+id,doc=await firestoreGet(env,token,path);
+  if(!doc)throw new Error("Firebase에서 계정을 찾을 수 없습니다.");
+  const before=decodeFirestoreDoc(doc);
+  if(action==="deletePlayer"){
+    await audit(db,uid,action,id,before,null,data.reason||"관리자 계정 삭제");
+    await firestoreDelete(env,token,path);
+    return {ok:true,deleted:id};
   }
-  if (action==="setBan") {
+  if(action==="setBan"){
     const after={...before,moderation:data.banned?{status:"banned",reason:cleanReason(data.reason)||"관리자 제재",detectedAt:Date.now(),source:"admin"}:{status:"clear",reason:"",clearedAt:Date.now(),source:"admin"}};
-    await db.prepare("UPDATE players SET data_json=?,updated_at=? WHERE id=?").bind(JSON.stringify(after),Date.now(),id).run();
-    await audit(db,uid,action,id,before,after,data.reason);
-    return {ok:true};
+    await firestoreSet(env,token,path,after,before);
+    await audit(db,uid,action,id,before,after,data.reason||"");
+    return {ok:true,player:after};
   }
-  if (action==="adjustScore") {
-    const field=String(data.field||""), delta=Number(data.delta);
-    if (!Number.isInteger(delta)||Math.abs(delta)>1000000) throw new Error("점수 변경값은 -1,000,000~1,000,000 정수여야 합니다.");
+  if(action==="adjustScore"){
+    const field=String(data.field||""),delta=Number(data.delta);
+    if(!Number.isInteger(delta)||Math.abs(delta)>1000000)throw new Error("점수 변경값은 -1,000,000~1,000,000 정수여야 합니다.");
     const after={...before};
     if(field.startsWith("s.")){const game=field.slice(2);if(!/^[a-z0-9_-]{1,40}$/.test(game))throw new Error("잘못된 게임 항목입니다.");after.s={...(before.s||{})};after.s[game]=Math.max(0,(Number(after.s[game])||0)+delta);}
     else if(["pts","cp","xp","dw"].includes(field))after[field]=Math.max(0,(Number(before[field])||0)+delta);
     else throw new Error("허용되지 않은 점수 항목입니다.");
-    await db.prepare("UPDATE players SET data_json=?,updated_at=? WHERE id=?").bind(JSON.stringify(after),Date.now(),id).run();
-    await audit(db,uid,action,id,before,after,field+" "+delta,{field,delta});
-    return {ok:true};
+    await firestoreSet(env,token,path,after,before);
+    await audit(db,uid,action,id,before,after,cleanReason(data.reason)||field+" "+delta,{field,delta});
+    return {ok:true,player:after};
+  }
+  if(action==="rollback"){
+    const auditId=Number(data.auditId);
+    if(!Number.isInteger(auditId)||auditId<1)throw new Error("잘못된 감사 기록 ID입니다.");
+    const log=await db.prepare("SELECT action,player_id,before_json,after_json FROM admin_audit WHERE id=?").bind(auditId).first();
+    if(!log||!log.player_id||!log.before_json)throw new Error("복원 가능한 플레이어 변경 기록이 아닙니다.");
+    const restore=JSON.parse(log.before_json),currentDoc=await firestoreGet(env,token,"players/"+log.player_id);
+    const current=currentDoc?decodeFirestoreDoc(currentDoc):{};
+    await firestoreSet(env,token,"players/"+log.player_id,restore,current);
+    await audit(db,uid,"rollback",log.player_id,current,restore,"관리자 롤백",{sourceAuditId:auditId});
+    return {ok:true,player:restore,playerId:log.player_id};
   }
   throw new Error("지원하지 않는 관리자 작업입니다.");
 }
