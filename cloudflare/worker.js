@@ -229,9 +229,16 @@ async function adminAction(request, env, action, data) {
     const auditId=Number(data.auditId);
     if(!Number.isInteger(auditId)||auditId<1)throw new Error("잘못된 감사 기록 ID입니다.");
     const log=await db.prepare("SELECT action,player_id,before_json,after_json FROM admin_audit WHERE id=?").bind(auditId).first();
-    if(!log||!log.player_id||!log.before_json)throw new Error("복원 가능한 플레이어 변경 기록이 아닙니다.");
-    const restore=JSON.parse(log.before_json),currentDoc=await firestoreGet(env,token,"players/"+log.player_id);
-    const current=currentDoc?decodeFirestoreDoc(currentDoc):{};
+    if(!log||!log.before_json)throw new Error("복원 가능한 변경 기록이 아닙니다.");
+    const restore=JSON.parse(log.before_json);
+    if(log.action==="setSeason"){
+      const path="meta/season",currentDoc=await firestoreGet(env,token,path),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
+      await firestoreSet(env,token,path,restore,current);
+      await audit(db,uid,"rollback",null,current,restore,"시즌 변경 롤백",{sourceAuditId:auditId});
+      return {ok:true,meta:restore};
+    }
+    if(!log.player_id)throw new Error("복원 가능한 플레이어 변경 기록이 아닙니다.");
+    const currentDoc=await firestoreGet(env,token,"players/"+log.player_id),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
     await firestoreSet(env,token,"players/"+log.player_id,restore,current);
     await audit(db,uid,"rollback",log.player_id,current,restore,"관리자 롤백",{sourceAuditId:auditId});
     return {ok:true,player:restore,playerId:log.player_id};
