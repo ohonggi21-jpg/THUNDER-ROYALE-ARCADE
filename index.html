@@ -293,12 +293,14 @@ async function login(){
  if(blockedNickname(v)){alert('부적절한 닉네임은 사용할 수 없습니다.');return}
  if(!authReady||!auth?.currentUser){alert('Firebase 로그인 준비 중이에요. 잠시 후 다시 시도해 주세요.');return}
  const id=pid(v);
- if(!deletedPlayersReady){alert('서버 계정 정보를 확인 중이에요. 잠시 후 다시 시도해 주세요.');return}
+ if(!deletedPlayersReady||!onlinePlayersReady){alert('서버 계정 정보를 확인 중이에요. 잠시 후 다시 시도해 주세요.');return}
  if(deletedPlayerIds.has(id)){alert('삭제된 계정이에요. 다른 닉네임으로 입장해 주세요.');return}
  try{
-  P[id]=P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
+  const existing=P[id];
+  if(existing?.ownerUid&&existing.ownerUid!==auth.currentUser.uid){alert('이 닉네임은 다른 Firebase 계정에 연결되어 있어요.');return}
+  P[id]=existing||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
   P[id].name=v;
-  if(auth.currentUser)P[id].ownerUid=auth.currentUser.uid;
+  if(!P[id].ownerUid)P[id].ownerUid=auth.currentUser.uid;
   me=v;identityVerified=true;ensureDaily(P[id]);
   await persistPlayer(id);
   try{localStorage.setItem('trc_me',v)}catch(e){}
