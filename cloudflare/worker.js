@@ -233,8 +233,7 @@ async function adminAction(request, env, action, data) {
     if(data.resetChampionship===true){
       const [allDocs,deleted]=await Promise.all([firestoreListAll(env,token,"players"),listDeletedPlayerIds(env,token)]);
       const docs=allDocs.filter(d=>!deleted.has(d.name.split("/").pop()));
-      /** @type {Array<Record<string, any> & {id: string}>} */
-      const ranked=docs.map(d=>({id:String(d.name.split("/").pop()||""),...decodeFirestoreDoc(d)})).filter(p=>(Number(p.cm)||0)>0).sort((a,b)=>(Number(b.cp)||0)-(Number(a.cp)||0));
+      const ranked=/** @type {Array<Record<string, any> & {id: string}>} */ (docs.map(d=>({id:String(d.name.split("/").pop()||""),...decodeFirestoreDoc(d)}))).filter(p=>(Number(p.cm)||0)>0).sort((a,b)=>(Number(b.cp)||0)-(Number(a.cp)||0));
       const champ=ranked[0];
       if(season!==(Number(before.n)||1)&&champ)after.hof=[...(Array.isArray(before.hof)?before.hof:[]),{s:Number(before.n)||1,name:champ.name||"Unknown",points:Number(champ.cp)||0,wins:Number(champ.cw)||0,matches:Number(champ.cm)||0}];
       for(const d of docs){
