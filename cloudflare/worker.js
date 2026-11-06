@@ -33,9 +33,6 @@ function decodeJwtJson(segment, label) {
   }
 }
 
-let firebaseJwksCache = null;
-let firebaseJwksCacheUntil = 0;
-
 async function getFirebaseJwks() {
   const now = Date.now();
   if (firebaseJwksCache && now < firebaseJwksCacheUntil) return firebaseJwksCache;
