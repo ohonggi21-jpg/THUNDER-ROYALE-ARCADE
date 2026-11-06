@@ -15,45 +15,63 @@ let firebaseJwksCache = null;
 let firebaseJwksCacheUntil = 0;
 
 function base64UrlBytes(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error("토큰 조각에 허용되지 않은 문자가 있습니다.");
+  }
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
   const binary = atob(padded);
   return Uint8Array.from(binary, ch => ch.charCodeAt(0));
 }
 
+function decodeJwtJson(segment, label) {
+  try {
+    const bytes = base64UrlBytes(segment);
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch (_) {
+    throw new Error("Firebase 로그인 토큰의 " + label + " 부분을 해석할 수 없습니다.");
+  }
+}
+
+let firebaseJwksCache = null;
+let firebaseJwksCacheUntil = 0;
+
 async function getFirebaseJwks() {
   const now = Date.now();
   if (firebaseJwksCache && now < firebaseJwksCacheUntil) return firebaseJwksCache;
   const response = await fetch("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com");
-  if (!response.ok) throw new Error("Firebase 공개키를 가져오지 못했습니다.");
+  if (!response.ok) throw new Error("Firebase 공개키를 가져오지 못했습니다. HTTP " + response.status);
   const data = await response.json();
   if (!data.keys || !Array.isArray(data.keys)) throw new Error("Firebase 공개키 응답이 올바르지 않습니다.");
   const cacheControl = response.headers.get("Cache-Control") || "";
-  const maxAge = Number((cacheControl.match(/max-age=(\\d+)/i) || [])[1]) || 3600;
+  const maxAge = Number((cacheControl.match(/max-age=(\d+)/i) || [])[1]) || 3600;
   firebaseJwksCache = data.keys;
   firebaseJwksCacheUntil = now + Math.min(maxAge, 86400) * 1000;
   return firebaseJwksCache;
 }
 
 async function verifyFirebase(request, env) {
-  const token = (request.headers.get("Authorization") || "").replace(/^Bearer\\s+/i, "").trim();
-  if (!token) throw new Error("로그인이 필요합니다.");
+  const authHeader = request.headers.get("Authorization") || "";
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!bearerMatch) throw new Error("Firebase 로그인 토큰이 Authorization Bearer 헤더에 없습니다.");
+  const token = bearerMatch[1].trim();
 
   const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("Firebase 로그인 토큰 형식이 올바르지 않습니다.");
-
-  let header, payload;
-  try {
-    header = JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[0])));
-    payload = JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[1])));
-  } catch (_) {
-    throw new Error("Firebase 로그인 토큰을 해석할 수 없습니다.");
+  if (parts.length !== 3 || parts.some(part => !part)) {
+    throw new Error("Firebase 로그인 토큰 형식이 올바르지 않습니다.");
   }
 
-  if (header.alg !== "RS256" || !header.kid) throw new Error("Firebase 로그인 토큰 서명이 올바르지 않습니다.");
+  const header = decodeJwtJson(parts[0], "헤더");
+  const payload = decodeJwtJson(parts[1], "본문");
+
+  if (header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) {
+    throw new Error("Firebase 로그인 토큰 서명 정보가 올바르지 않습니다.");
+  }
+
   const now = Math.floor(Date.now() / 1000);
-  const projectId = String(env.FIREBASE_PROJECT_ID || "");
-  if (!projectId || payload.aud !== projectId || payload.iss !== "https://securetoken.google.com/" + projectId ||
+  const projectId = String(env.FIREBASE_PROJECT_ID || "").trim();
+  if (!projectId || payload.aud !== projectId ||
+      payload.iss !== "https://securetoken.google.com/" + projectId ||
       typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 128 ||
       typeof payload.exp !== "number" || payload.exp <= now ||
       typeof payload.iat !== "number" || payload.iat > now + 300) {
