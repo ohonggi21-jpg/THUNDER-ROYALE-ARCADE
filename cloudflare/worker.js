@@ -143,6 +143,40 @@ async function firestoreDelete(env,token,path) {
   if(!response.ok){const raw=await response.text();throw new Error("Firestore 삭제 실패 · HTTP "+response.status+" "+raw.slice(0,300));}
 }
 
+async function firestoreListAll(env,token,collectionName,limit=5000) {
+  const documents=[];let pageToken="";
+  do {
+    const params=new URLSearchParams({pageSize:"1000"});
+    if(pageToken)params.set("pageToken",pageToken);
+    const page=await firestoreRequest(env,token,collectionName+"?"+params.toString());
+    documents.push(...(page.documents||[]));
+    pageToken=page.nextPageToken||"";
+    if(documents.length>limit&&pageToken)throw new Error("Firestore 목록이 안전 조회 한도 "+limit+"개를 초과했습니다.");
+  } while(pageToken);
+  return documents;
+}
+async function isPlayerDeleted(env,token,id) {
+  return !!(await firestoreGet(env,token,"meta/deletedPlayer_"+id));
+}
+async function setPlayerDeleted(env,token,id,uid) {
+  const path="meta/deletedPlayer_"+id;
+  const beforeDoc=await firestoreGet(env,token,path);
+  const before=beforeDoc?decodeFirestoreDoc(beforeDoc):{};
+  const after={kind:"deletedPlayer",id,deletedAt:Date.now(),deletedBy:uid||"admin"};
+  await firestoreSet(env,token,path,after,before);
+}
+async function clearPlayerDeleted(env,token,id) {
+  await firestoreDelete(env,token,"meta/deletedPlayer_"+id);
+}
+async function listDeletedPlayerIds(env,token) {
+  const docs=await firestoreListAll(env,token,"meta");
+  return new Set(docs.filter(d=>d.fields?.kind?.stringValue==="deletedPlayer").map(d=>d.fields?.id?.stringValue||d.name.split("/").pop().replace(/^deletedPlayer_/,"")));
+}
+function withAdminChange(before,after,fields) {
+  const protectedFields=new Set([...(Array.isArray(before.adminFields)?before.adminFields:[]),...fields]);
+  return {...after,adminRevision:(Number(before.adminRevision)||0)+1,adminFields:[...protectedFields]};
+}
+
 async function audit(db, actor, action, playerId, before, after, note="", details={}) {
   await db.prepare("INSERT INTO admin_audit(actor_uid, action, player_id, note, before_json, after_json, details_json, created_at) VALUES(?,?,?,?,?,?,?,?)")
     .bind(actor, action, playerId || null, cleanReason(note), before == null ? null : JSON.stringify(before), after == null ? null : JSON.stringify(after), JSON.stringify(details || {}), Date.now()).run();
@@ -174,8 +208,14 @@ async function adminAction(request, env, action, data) {
     return {items:rows.results||[]};
   }
   if(action==="listPlayers"){
-    const response=await firestoreRequest(env,token,"players");
-    return {items:(response.documents||[]).map(doc=>({id:doc.name.split("/").pop(),player:decodeFirestoreDoc(doc)}))};
+    const [documents,deleted]=await Promise.all([firestoreListAll(env,token,"players"),listDeletedPlayerIds(env,token)]);
+    const items=[];
+    for(const doc of documents){
+      const id=doc.name.split("/").pop();
+      if(deleted.has(id)){await firestoreDelete(env,token,"players/"+id);continue;}
+      items.push({id,player:decodeFirestoreDoc(doc)});
+    }
+    return {items};
   }
   if(action==="setSeason"){
     const season=Number(data.season);
@@ -186,13 +226,13 @@ async function adminAction(request, env, action, data) {
     /** @type {Record<string, any>} */
     const after = {...before,n:season,seasonAdjustedAt:Date.now()};
     if(data.resetChampionship===true){
-      const response=await firestoreRequest(env,token,"players");
-      const docs=response.documents||[];
+      const [allDocs,deleted]=await Promise.all([firestoreListAll(env,token,"players"),listDeletedPlayerIds(env,token)]);
+      const docs=allDocs.filter(d=>!deleted.has(d.name.split("/").pop()));
       const ranked=docs.map(d=>({id:d.name.split("/").pop(),...decodeFirestoreDoc(d)})).filter(p=>(Number(p.cm)||0)>0).sort((a,b)=>(Number(b.cp)||0)-(Number(a.cp)||0));
       const champ=ranked[0];
       if(season!==(Number(before.n)||1)&&champ)after.hof=[...(Array.isArray(before.hof)?before.hof:[]),{s:Number(before.n)||1,name:champ.name||"Unknown",points:Number(champ.cp)||0,wins:Number(champ.cw)||0,matches:Number(champ.cm)||0}];
       for(const d of docs){
-        const p=decodeFirestoreDoc(d),reset={...p,cp:0,cw:0,cd:0,cl:0,cm:0};
+        const p=decodeFirestoreDoc(d),reset=withAdminChange(p,{...p,cp:0,cw:0,cd:0,cl:0,cm:0},["cp","cw","cd","cl","cm"]);
         await firestoreSet(env,token,"players/"+d.name.split("/").pop(),reset,p);
       }
     }
@@ -203,15 +243,23 @@ async function adminAction(request, env, action, data) {
   const id=String(data.playerId||"");
   if(!validId(id))throw new Error("잘못된 계정 ID입니다.");
   const path="players/"+id,doc=await firestoreGet(env,token,path);
-  if(!doc)throw new Error("Firebase에서 계정을 찾을 수 없습니다.");
-  const before=decodeFirestoreDoc(doc);
   if(action==="deletePlayer"){
+    if(!doc){
+      if(await isPlayerDeleted(env,token,id))return {ok:true,deleted:id,alreadyDeleted:true};
+      throw new Error("Firebase에서 계정을 찾을 수 없습니다.");
+    }
+    const before=decodeFirestoreDoc(doc);
     await audit(db,uid,action,id,before,null,data.reason||"관리자 계정 삭제");
+    // Write a durable tombstone before deleting so old/offline clients cannot resurrect it.
+    await setPlayerDeleted(env,token,id,uid);
     await firestoreDelete(env,token,path);
+    if(await firestoreGet(env,token,path))throw new Error("계정 삭제 후에도 Firestore 문서가 남아 있습니다. 다시 시도해 주세요.");
     return {ok:true,deleted:id};
   }
+  if(!doc)throw new Error("Firebase에서 계정을 찾을 수 없습니다.");
+  const before=decodeFirestoreDoc(doc);
   if(action==="setBan"){
-    const after={...before,moderation:data.banned?{status:"banned",reason:cleanReason(data.reason)||"관리자 제재",detectedAt:Date.now(),source:"admin"}:{status:"clear",reason:"",clearedAt:Date.now(),source:"admin"}};
+    const after=withAdminChange(before,{...before,moderation:data.banned?{status:"banned",reason:cleanReason(data.reason)||"관리자 제재",detectedAt:Date.now(),source:"admin"}:{status:"clear",reason:"",clearedAt:Date.now(),source:"admin"}},["moderation"]);
     await firestoreSet(env,token,path,after,before);
     await audit(db,uid,action,id,before,after,data.reason||"");
     return {ok:true,player:after};
@@ -223,27 +271,51 @@ async function adminAction(request, env, action, data) {
     if(field.startsWith("s.")){const game=field.slice(2);if(!/^[a-z0-9_-]{1,40}$/.test(game))throw new Error("잘못된 게임 항목입니다.");after.s={...(before.s||{})};after.s[game]=Math.max(0,(Number(after.s[game])||0)+delta);}
     else if(["pts","cp","xp","dw"].includes(field))after[field]=Math.max(0,(Number(before[field])||0)+delta);
     else throw new Error("허용되지 않은 점수 항목입니다.");
-    await firestoreSet(env,token,path,after,before);
-    await audit(db,uid,action,id,before,after,cleanReason(data.reason)||field+" "+delta,{field,delta});
+    const versioned=withAdminChange(before,after,[field]);
+    await firestoreSet(env,token,path,versioned,before);
+    await audit(db,uid,action,id,before,versioned,cleanReason(data.reason)||field+" "+delta,{field,delta});
     return {ok:true,player:after};
   }
   if(action==="rollback"){
     const auditId=Number(data.auditId);
     if(!Number.isInteger(auditId)||auditId<1)throw new Error("잘못된 감사 기록 ID입니다.");
-    const log=await db.prepare("SELECT action,player_id,before_json,after_json FROM admin_audit WHERE id=?").bind(auditId).first();
+    const log=await db.prepare("SELECT action,player_id,before_json,after_json,details_json FROM admin_audit WHERE id=?").bind(auditId).first();
     if(!log||!log.before_json)throw new Error("복원 가능한 변경 기록이 아닙니다.");
     const restore=JSON.parse(log.before_json);
     if(log.action==="setSeason"){
-      const path="meta/season",currentDoc=await firestoreGet(env,token,path),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
-      await firestoreSet(env,token,path,restore,current);
+      const seasonPath="meta/season",currentDoc=await firestoreGet(env,token,seasonPath),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
+      await firestoreSet(env,token,seasonPath,restore,current);
       await audit(db,uid,"rollback",null,current,restore,"시즌 변경 롤백",{sourceAuditId:auditId});
       return {ok:true,meta:restore};
     }
     if(!log.player_id)throw new Error("복원 가능한 플레이어 변경 기록이 아닙니다.");
-    const currentDoc=await firestoreGet(env,token,"players/"+log.player_id),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
-    await firestoreSet(env,token,"players/"+log.player_id,restore,current);
-    await audit(db,uid,"rollback",log.player_id,current,restore,"관리자 롤백",{sourceAuditId:auditId});
-    return {ok:true,player:restore,playerId:log.player_id};
+    const playerId=log.player_id,playerPath="players/"+playerId;
+    const currentDoc=await firestoreGet(env,token,playerPath),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
+    let next;
+    if(log.action==="deletePlayer"){
+      await clearPlayerDeleted(env,token,playerId);
+      next=restore;
+    } else if(log.action==="setBan"){
+      next={...current};
+      if(Object.prototype.hasOwnProperty.call(restore,"moderation"))next.moderation=restore.moderation;else delete next.moderation;
+      next=withAdminChange(current,next,["moderation"]);
+    } else if(log.action==="adjustScore"){
+      const details=JSON.parse(log.details_json||"{}"),field=String(details.field||"");
+      next={...current};
+      if(field.startsWith("s.")){
+        const game=field.slice(2);next.s={...(current.s||{})};
+        if(Object.prototype.hasOwnProperty.call(restore.s||{},game))next.s[game]=restore.s[game];else delete next.s[game];
+      } else if(["pts","cp","xp","dw"].includes(field)){
+        if(Object.prototype.hasOwnProperty.call(restore,field))next[field]=restore[field];else delete next[field];
+      } else throw new Error("점수 롤백 항목을 확인할 수 없습니다.");
+      next=withAdminChange(current,next,[field]);
+    } else {
+      next=restore;
+      if(current&&Object.keys(current).length)next=withAdminChange(current,next,Object.keys(restore));
+    }
+    await firestoreSet(env,token,playerPath,next,current);
+    await audit(db,uid,"rollback",playerId,current,next,"관리자 롤백",{sourceAuditId:auditId});
+    return {ok:true,player:next,playerId};
   }
   throw new Error("지원하지 않는 관리자 작업입니다.");
 }
