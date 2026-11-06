@@ -11,17 +11,80 @@ function json(data, status=200) {
 function cleanReason(v) { return String(v || "").trim().slice(0, 240); }
 function validId(v) { return typeof v === "string" && /^[a-z0-9_]{1,180}$/.test(v); }
 
+let firebaseJwksCache = null;
+let firebaseJwksCacheUntil = 0;
+
+function base64UrlBytes(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, ch => ch.charCodeAt(0));
+}
+
+async function getFirebaseJwks() {
+  const now = Date.now();
+  if (firebaseJwksCache && now < firebaseJwksCacheUntil) return firebaseJwksCache;
+  const response = await fetch("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com");
+  if (!response.ok) throw new Error("Firebase 공개키를 가져오지 못했습니다.");
+  const data = await response.json();
+  if (!data.keys || !Array.isArray(data.keys)) throw new Error("Firebase 공개키 응답이 올바르지 않습니다.");
+  const cacheControl = response.headers.get("Cache-Control") || "";
+  const maxAge = Number((cacheControl.match(/max-age=(\\d+)/i) || [])[1]) || 3600;
+  firebaseJwksCache = data.keys;
+  firebaseJwksCacheUntil = now + Math.min(maxAge, 86400) * 1000;
+  return firebaseJwksCache;
+}
+
 async function verifyFirebase(request, env) {
-  const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  const token = (request.headers.get("Authorization") || "").replace(/^Bearer\\s+/i, "").trim();
   if (!token) throw new Error("로그인이 필요합니다.");
-  // Google validates the Firebase ID token signature and expiry.
-  const response = await fetch("https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(token));
-  if (!response.ok) throw new Error("로그인 토큰을 확인할 수 없습니다.");
-  const info = await response.json();
-  if (info.aud !== env.FIREBASE_PROJECT_ID || info.iss !== "https://securetoken.google.com/" + env.FIREBASE_PROJECT_ID || !info.sub) {
-    throw new Error("다른 프로젝트의 로그인 토큰입니다.");
+
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("Firebase 로그인 토큰 형식이 올바르지 않습니다.");
+
+  let header, payload;
+  try {
+    header = JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[0])));
+    payload = JSON.parse(new TextDecoder().decode(base64UrlBytes(parts[1])));
+  } catch (_) {
+    throw new Error("Firebase 로그인 토큰을 해석할 수 없습니다.");
   }
-  return info.sub;
+
+  if (header.alg !== "RS256" || !header.kid) throw new Error("Firebase 로그인 토큰 서명이 올바르지 않습니다.");
+  const now = Math.floor(Date.now() / 1000);
+  const projectId = String(env.FIREBASE_PROJECT_ID || "");
+  if (!projectId || payload.aud !== projectId || payload.iss !== "https://securetoken.google.com/" + projectId ||
+      typeof payload.sub !== "string" || !payload.sub || payload.sub.length > 128 ||
+      typeof payload.exp !== "number" || payload.exp <= now ||
+      typeof payload.iat !== "number" || payload.iat > now + 300) {
+    throw new Error("Firebase 로그인 토큰이 만료되었거나 프로젝트 정보가 일치하지 않습니다.");
+  }
+
+  const keys = await getFirebaseJwks();
+  const jwk = keys.find(key => key.kid === header.kid && key.kty === "RSA");
+  if (!jwk) {
+    firebaseJwksCache = null;
+    firebaseJwksCacheUntil = 0;
+    throw new Error("Firebase 로그인 서명 키를 찾을 수 없습니다. 다시 인증해 주세요.");
+  }
+
+  let valid = false;
+  try {
+    const publicKey = await crypto.subtle.importKey(
+      "jwk", jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false, ["verify"]
+    );
+    valid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5", publicKey,
+      base64UrlBytes(parts[2]),
+      new TextEncoder().encode(parts[0] + "." + parts[1])
+    );
+  } catch (_) {
+    throw new Error("Firebase 로그인 토큰 서명을 확인하지 못했습니다.");
+  }
+  if (!valid) throw new Error("Firebase 로그인 토큰 서명이 유효하지 않습니다.");
+  return payload.sub;
 }
 
 async function requireAdmin(request, env) {
