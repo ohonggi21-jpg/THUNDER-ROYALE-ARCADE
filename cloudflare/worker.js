@@ -181,8 +181,10 @@ async function adminAction(request, env, action, data) {
     const season=Number(data.season);
     if(!Number.isInteger(season)||season<1||season>9999)throw new Error("시즌 번호는 1~9999 사이의 정수여야 합니다.");
     const path="meta/season",doc=await firestoreGet(env,token,path);
-    const before: Record<string, any> = doc ? decodeFirestoreDoc(doc) : {n:1,hof:[],history:[]};
-    const after: Record<string, any> = {...before,n:season,seasonAdjustedAt:Date.now()};
+    /** @type {Record<string, any>} */
+    const before = doc ? decodeFirestoreDoc(doc) : {n:1,hof:[],history:[]};
+    /** @type {Record<string, any>} */
+    const after = {...before,n:season,seasonAdjustedAt:Date.now()};
     if(data.resetChampionship===true){
       const response=await firestoreRequest(env,token,"players");
       const docs=response.documents||[];
