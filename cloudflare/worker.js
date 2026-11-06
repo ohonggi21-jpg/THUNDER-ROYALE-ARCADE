@@ -129,12 +129,13 @@ async function firestoreGet(env,token,path) {
   if(!response.ok)throw new Error((body.error&&body.error.message)||("Firestore 조회 실패 · HTTP "+response.status));
   return body;
 }
-async function firestoreSet(env,token,path,value,previous={}) {
+async function firestoreSet(env,token,path,value,previous={},updateTime=null) {
   const fields={};for(const [k,v] of Object.entries(value))fields[k]=firestoreValue(v);
   const oldKeys=Object.keys(previous||{}),newKeys=Object.keys(value||{});
-  const masks=[...new Set([...oldKeys,...newKeys])];
-  const qs=masks.map(k=>"updateMask.fieldPaths="+encodeURIComponent(k)).join("&");
-  const suffix=qs?"?"+qs:"";
+  const params=new URLSearchParams();
+  for(const key of [...new Set([...oldKeys,...newKeys])])params.append("updateMask.fieldPaths",key);
+  if(updateTime)params.set("currentDocument.updateTime",updateTime);
+  const suffix=params.toString()?"?"+params.toString():"";
   return firestoreRequest(env,token,path+suffix,{method:"PATCH",body:JSON.stringify({fields})});
 }
 async function firestoreDelete(env,token,path) {
@@ -233,10 +234,11 @@ async function adminAction(request, env, action, data) {
       if(season!==(Number(before.n)||1)&&champ)after.hof=[...(Array.isArray(before.hof)?before.hof:[]),{s:Number(before.n)||1,name:champ.name||"Unknown",points:Number(champ.cp)||0,wins:Number(champ.cw)||0,matches:Number(champ.cm)||0}];
       for(const d of docs){
         const p=decodeFirestoreDoc(d),reset=withAdminChange(p,{...p,cp:0,cw:0,cd:0,cl:0,cm:0},["cp","cw","cd","cl","cm"]);
-        await firestoreSet(env,token,"players/"+d.name.split("/").pop(),reset,p);
+        await firestoreSet(env,token,"players/"+d.name.split("/").pop(),reset,p,d.updateTime);
+        await audit(db,uid,"resetChampionship",d.name.split("/").pop(),p,reset,"시즌 변경에 따른 챔피언십 점수 초기화",{fields:["cp","cw","cd","cl","cm"]});
       }
     }
-    await firestoreSet(env,token,path,after,before);
+    await firestoreSet(env,token,path,after,before,doc&&doc.updateTime);
     await audit(db,uid,action,null,before,after,"Firebase 시즌 번호 변경");
     return {ok:true,season,meta:after};
   }
@@ -260,7 +262,7 @@ async function adminAction(request, env, action, data) {
   const before=decodeFirestoreDoc(doc);
   if(action==="setBan"){
     const after=withAdminChange(before,{...before,moderation:data.banned?{status:"banned",reason:cleanReason(data.reason)||"관리자 제재",detectedAt:Date.now(),source:"admin"}:{status:"clear",reason:"",clearedAt:Date.now(),source:"admin"}},["moderation"]);
-    await firestoreSet(env,token,path,after,before);
+    await firestoreSet(env,token,path,after,before,doc&&doc.updateTime);
     await audit(db,uid,action,id,before,after,data.reason||"");
     return {ok:true,player:after};
   }
@@ -272,7 +274,7 @@ async function adminAction(request, env, action, data) {
     else if(["pts","cp","xp","dw"].includes(field))after[field]=Math.max(0,(Number(before[field])||0)+delta);
     else throw new Error("허용되지 않은 점수 항목입니다.");
     const versioned=withAdminChange(before,after,[field]);
-    await firestoreSet(env,token,path,versioned,before);
+    await firestoreSet(env,token,path,versioned,before,doc&&doc.updateTime);
     await audit(db,uid,action,id,before,versioned,cleanReason(data.reason)||field+" "+delta,{field,delta});
     return {ok:true,player:versioned};
   }
@@ -284,7 +286,7 @@ async function adminAction(request, env, action, data) {
     const restore=JSON.parse(log.before_json);
     if(log.action==="setSeason"){
       const seasonPath="meta/season",currentDoc=await firestoreGet(env,token,seasonPath),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
-      await firestoreSet(env,token,seasonPath,restore,current);
+      await firestoreSet(env,token,seasonPath,restore,current,currentDoc&&currentDoc.updateTime);
       await audit(db,uid,"rollback",null,current,restore,"시즌 변경 롤백",{sourceAuditId:auditId});
       return {ok:true,meta:restore};
     }
@@ -309,11 +311,17 @@ async function adminAction(request, env, action, data) {
         if(Object.prototype.hasOwnProperty.call(restore,field))next[field]=restore[field];else delete next[field];
       } else throw new Error("점수 롤백 항목을 확인할 수 없습니다.");
       next=withAdminChange(current,next,[field]);
+    } else if(log.action==="resetChampionship"){
+      next={...current};
+      for(const field of ["cp","cw","cd","cl","cm"]){
+        if(Object.prototype.hasOwnProperty.call(restore,field))next[field]=restore[field];else delete next[field];
+      }
+      next=withAdminChange(current,next,["cp","cw","cd","cl","cm"]);
     } else {
       next=restore;
       if(current&&Object.keys(current).length)next=withAdminChange(current,next,Object.keys(restore));
     }
-    await firestoreSet(env,token,playerPath,next,current);
+    await firestoreSet(env,token,playerPath,next,current,currentDoc&&currentDoc.updateTime);
     await audit(db,uid,"rollback",playerId,current,next,"관리자 롤백",{sourceAuditId:auditId});
     return {ok:true,player:next,playerId};
   }
