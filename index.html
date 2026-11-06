@@ -124,12 +124,12 @@ input[type=file]{font-size:12px;padding:8px}
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-functions-compat.js"></script>
+
 <script>
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
 const $=s=>document.querySelector(s),A=$('#app');
-let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,authReady=false,identityVerified=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false,deletedPlayerIds=new Set(),deletedPlayersReady=false,pendingPlayersSnapshot=null;
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,authReady=false,identityVerified=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false,deletedPlayerIds=new Set(),deletedPlayersReady=false,pendingPlayersSnapshot=null;
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
@@ -578,7 +578,6 @@ render();
     try{await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)}catch(e){console.warn('Auth persistence:',e)}
     if(!auth.currentUser) await auth.signInAnonymously();
     db=firebase.firestore();
-    functionsApi=firebase.functions();
     authReady=true;
     try{db.settings({ignoreUndefinedProperties:true})}catch(e){}
     db.doc('meta/season').onSnapshot(s=>{
