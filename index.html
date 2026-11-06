@@ -129,7 +129,7 @@ input[type=file]{font-size:12px;padding:8px}
 const G=[{id:'roulette',n:'ROYAL ROULETTE',ic:'🎡'},{id:'slot',n:'GOLDEN JACKPOT',ic:'🎰'},{id:'bj',n:'BLACKJACK 21',ic:'🃏'},{id:'dice',n:'DICE DUEL',ic:'🎲'},{id:'hl',n:'HIGH & LOW',ic:'⬆️'},{id:'poker',n:'ROYAL POKER',ic:'♠️'}];
 const TT=[[600,'THUNDER GOD'],[500,'LEGEND'],[400,'ROYAL'],[300,'ACE'],[200,'HIGH ROLLER'],[100,'PLAYER'],[0,'ROOKIE']];
 const $=s=>document.querySelector(s),A=$('#app');
-let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,authReady=false,identityVerified=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false;
+let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,functionsApi=null,authReady=false,identityVerified=false,adminAudit=[],firebaseError='',me='',snd=true,taps=0,au=0,cf=0,M={n:1,hof:[],history:[]},dq=null,rkf='all',champMore=false,deletedPlayerIds=new Set(),deletedPlayersReady=false,pendingPlayersSnapshot=null;
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
@@ -141,6 +141,83 @@ const champSorted=()=>Object.values(P).filter(p=>p&&(p.cm||0)>0).sort((a,b)=>(Nu
 const pointText=n=>(Number(n)>0?'+':'')+String(Number(n)||0);
 const lsLoad=()=>{try{return JSON.parse(localStorage.getItem('trc_players'))||{}}catch(e){return{}}};
 const lsSave=()=>{try{localStorage.setItem('trc_players',JSON.stringify(P))}catch(e){}};
+function applyDeletedPlayerSnapshot(s){
+ deletedPlayerIds=new Set((s.docs||[]).map(d=>String((d.data()&&d.data().id)||d.id.replace(/^deletedPlayer_/,''))).filter(Boolean));
+ deletedPlayersReady=true;
+ for(const id of deletedPlayerIds)delete P[id];
+ lsSave();
+ if(pendingPlayersSnapshot){const pending=pendingPlayersSnapshot;pendingPlayersSnapshot=null;applyRemotePlayersSnapshot(pending)}
+ else if(['menu','rank','prof','adm','champ','tv'].includes(view))render();
+}
+function applyRemotePlayersSnapshot(s){
+ if(!deletedPlayersReady){pendingPlayersSnapshot=s;return}
+ const remotePlayers={},purge=[];
+ s.docs.forEach(d=>{
+  if(deletedPlayerIds.has(d.id))purge.push(d.id);
+  else remotePlayers[d.id]=d.data();
+ });
+ P=remotePlayers;
+ onlinePlayersReady=true;
+ purge.forEach(id=>db.collection('players').doc(id).delete().catch(firebaseConnectionError));
+ migrateOnlineOnlyScores();
+ verifyStoredIdentity();
+ lsSave();
+ if(['menu','rank','prof','adm','tv','champ'].includes(view))render();
+}
+function copyAdminFields(target,source,fields){
+ for(const field of (Array.isArray(fields)?fields:[])){
+  if(field==='moderation'){
+   if(Object.prototype.hasOwnProperty.call(source,'moderation'))target.moderation=source.moderation;else delete target.moderation;
+  }else if(field.startsWith('s.')){
+   const game=field.slice(2);target.s={...(target.s||{})};
+   if(source.s&&Object.prototype.hasOwnProperty.call(source.s,game))target.s[game]=source.s[game];else delete target.s[game];
+  }else if(Object.prototype.hasOwnProperty.call(source,field))target[field]=source[field];
+  else delete target[field];
+ }
+ target.adminRevision=Number(source.adminRevision)||0;
+ target.adminFields=Array.isArray(source.adminFields)?source.adminFields:[];
+ return target;
+}
+async function persistPlayer(id){
+ if(!db){lsSave();return true}
+ if(!deletedPlayersReady)throw new Error('서버 계정 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');
+ if(deletedPlayerIds.has(id)){delete P[id];lsSave();throw new Error('삭제된 계정은 저장할 수 없어요. 다른 닉네임으로 입장해 주세요.')}
+ if(!P[id])throw new Error('저장할 플레이어 기록을 찾을 수 없어요.');
+ const ref=db.collection('players').doc(id),tombRef=db.collection('meta').doc('deletedPlayer_'+id);
+ let candidate={...P[id]};
+ await db.runTransaction(async tx=>{
+  const tomb=await tx.get(tombRef);
+  if(tomb.exists)throw new Error('삭제된 계정은 다시 저장할 수 없어요.');
+  const snap=await tx.get(ref);
+  if(snap.exists){
+   const server=snap.data()||{};
+   if((Number(server.adminRevision)||0)>(Number(candidate.adminRevision)||0))
+    candidate=copyAdminFields(candidate,server,server.adminFields);
+  }
+  tx.set(ref,candidate);
+ });
+ P[id]=candidate;lsSave();return true;
+}
+async function markPlayerDeleted(id){
+ if(!db){deletedPlayerIds.add(id);delete P[id];lsSave();return}
+ const ref=db.collection('players').doc(id),tombRef=db.collection('meta').doc('deletedPlayer_'+id);
+ await db.runTransaction(async tx=>{
+  await tx.get(tombRef);await tx.get(ref);
+  tx.set(tombRef,{kind:'deletedPlayer',id,deletedAt:Date.now(),deletedBy:'nickname-change'});
+  tx.delete(ref);
+ });
+ deletedPlayerIds.add(id);delete P[id];lsSave();
+}
+async function restorePlayerFromBackup(id,player){
+ if(!db){P[id]=player;deletedPlayerIds.delete(id);lsSave();return}
+ const ref=db.collection('players').doc(id),tombRef=db.collection('meta').doc('deletedPlayer_'+id);
+ await db.runTransaction(async tx=>{
+  await tx.get(tombRef);await tx.get(ref);
+  tx.delete(tombRef);tx.set(ref,player);
+ });
+ deletedPlayerIds.delete(id);P[id]=player;
+}
+
 const DAYKEY=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 function ensureDaily(p){if(!p.daily||p.daily.day!==DAYKEY())p.daily={day:DAYKEY(),solo:0,games:[],duels:0,claims:{}};if(typeof p.daily.solo!=='number')p.daily.solo=0;if(typeof p.daily.duels!=='number')p.daily.duels=0;if(!Array.isArray(p.daily.games))p.daily.games=[];if(!p.daily.claims||typeof p.daily.claims!=='object')p.daily.claims={};return p.daily}
 const ACH=[
@@ -160,7 +237,7 @@ const ACH=[
 {id:'level5',ic:'✨',name:'로열 멤버',desc:'레벨 5 달성',xp:120,ok:p=>Math.floor((p.xp||0)/250)+1>=5}
 ];
 function checkAchievements(p){p.badges=p.badges||[];let gained=[];for(const a of ACH){if(!p.badges.includes(a.id)&&a.ok(p)){p.badges.push(a.id);p.xp=(p.xp||0)+a.xp;gained.push(a)}}if(gained.length)p.lastBadges=gained.map(a=>a.id);return gained}
-function persistPlayer(id){if(db){return db.collection('players').doc(id).set(P[id]).catch(()=>lsSave())}lsSave();return Promise.resolve()}
+
 function xpInfo(p){const xp=Math.max(0,Number(p?.xp)||0);return{level:Math.floor(xp/250)+1,into:xp%250,next:250,percent:(xp%250)/250*100}}
 const DAILY=[
 {id:'solo',ic:'🎮',name:'오늘의 첫 판',desc:'솔로 미니게임 1회 플레이',goal:1,xp:40,progress:p=>p.daily?.solo||0},
@@ -173,7 +250,7 @@ function claimDaily(id){awardDaily(id)}
 function setTheme(v){try{localStorage.setItem('trc_theme',v)}catch(e){}applyTheme();if(view==='settings')render()}
 function applyTheme(){let v='auto';try{v=localStorage.getItem('trc_theme')||'auto'}catch(e){}if(v==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',v)}
 function exportBackup(){const data={app:'THUNDER ROYALE ARCADE',version:3,exportedAt:new Date().toISOString(),players:P,meta:M,activePlayer:me};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='THUNDER-ROYALE-BACKUP-'+DAYKEY()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-async function importBackup(input){const f=input.files&&input.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!['THUNDER ROYALE ARCADE','THUNDER ROYALE CASINO'].includes(d.app)||!d.players||typeof d.players!=='object')throw new Error('백업 파일 형식이 올바르지 않습니다.');if(!confirm('현재 기록에 백업 기록을 합칠까요? 같은 닉네임은 백업 내용으로 덮어씁니다.'))return;P={...P,...d.players};if(d.meta&&typeof d.meta==='object')M={...M,...d.meta};M.hof=M.hof||[];M.history=M.history||[];if(db){await Promise.all(Object.entries(d.players).map(([k,p])=>db.collection('players').doc(k).set(p)));await db.doc('meta/season').set(M)}else{lsSave();localStorage.setItem('trc_meta',JSON.stringify(M))}alert('백업 복원이 완료됐어요.');render()}catch(e){alert('복원 실패: '+e.message)}finally{input.value=''}}
+async function importBackup(input){const f=input.files&&input.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!['THUNDER ROYALE ARCADE','THUNDER ROYALE CASINO'].includes(d.app)||!d.players||typeof d.players!=='object')throw new Error('백업 파일 형식이 올바르지 않습니다.');if(!confirm('현재 기록에 백업 기록을 합칠까요? 같은 닉네임은 백업 내용으로 덮어씁니다.'))return;P={...P,...d.players};if(d.meta&&typeof d.meta==='object')M={...M,...d.meta};M.hof=M.hof||[];M.history=M.history||[];if(db){for(const [k,p] of Object.entries(d.players))await restorePlayerFromBackup(k,p);await db.doc('meta/season').set(M)}else{lsSave();localStorage.setItem('trc_meta',JSON.stringify(M))}alert('백업 복원이 완료됐어요.');render()}catch(e){alert('복원 실패: '+e.message)}finally{input.value=''}}
 function resetDeviceData(){if(db){alert('온라인 데이터베이스에 연결되어 있어 이 화면에서는 초기화하지 않아요. 관리자 메뉴에서 시즌/전체 기록 관리를 이용하세요.');return}if(!confirm('이 브라우저에 저장된 게임 기록과 시즌 기록을 모두 삭제할까요? 백업 후 진행하는 것을 추천해요.'))return;P={};M={n:1,hof:[],history:[]};try{localStorage.removeItem('trc_players');localStorage.removeItem('trc_meta')}catch(e){}alert('이 기기의 기록을 초기화했어요.');go('menu')}
 
 let ac;function bp(f=440,d=.08,t='sine'){if(!snd)return;try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),v=ac.createGain();o.type=t;o.frequency.value=f;v.gain.value=.05;o.connect(v);v.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
@@ -216,6 +293,8 @@ async function login(){
  if(blockedNickname(v)){alert('부적절한 닉네임은 사용할 수 없습니다.');return}
  if(!authReady||!auth?.currentUser){alert('Firebase 로그인 준비 중이에요. 잠시 후 다시 시도해 주세요.');return}
  const id=pid(v);
+ if(!deletedPlayersReady){alert('서버 계정 정보를 확인 중이에요. 잠시 후 다시 시도해 주세요.');return}
+ if(deletedPlayerIds.has(id)){alert('삭제된 계정이에요. 다른 닉네임으로 입장해 주세요.');return}
  try{
   P[id]=P[id]||{name:v,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
   P[id].name=v;
@@ -266,11 +345,12 @@ async function adminAdjust(k){const field=prompt('변경할 항목을 입력하�
 async function admDel(k){if(!confirm('이 계정을 삭제할까요? 삭제 전 기록은 관리자 로그에 보관되어 롤백할 수 있어요.'))return;try{await adminCall({action:'deletePlayer',playerId:k,reason:'관리자 계정 삭제'});alert('계정을 삭제했어요.');await adminRefreshAudit()}catch(e){alert('계정 삭제 실패: '+(e.message||e))}}
 async function admRollback(id){if(!confirm('이 관리 작업 직전의 계정 데이터로 복원할까요?'))return;try{await adminCall({action:'rollback',auditId:id});alert('계정 데이터를 롤백했어요.');await adminRefreshAudit()}catch(e){alert('롤백 실패: '+(e.message||e))}}
 async function admAll(){alert('전체 초기화는 안전을 위해 이 화면에서 비활성화했어요. 필요한 경우 백업 후 Firebase 콘솔에서 별도 작업해 주세요.')}
-function accountBlocked(){const p=P[pid(me)];if(authReady&&!identityVerified){alert('계정 서버 인증이 아직 완료되지 않았어요. 잠시 후 다시 시도해 주세요.');return true}if(p?.ownerUid&&auth?.currentUser&&p.ownerUid!==auth.currentUser.uid){alert('이 계정은 다른 기기에 연결되어 있습니다.');return true}if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
+function accountBlocked(){const id=pid(me),p=P[id];if(deletedPlayerIds.has(id)){alert('이 계정은 삭제되었습니다. 메인 화면에서 로그아웃한 뒤 다른 닉네임으로 입장해 주세요.');return true}if(authReady&&!deletedPlayersReady){alert('서버 계정 상태를 확인 중이에요. 잠시 후 다시 시도해 주세요.');return true}if(authReady&&!identityVerified){alert('계정 서버 인증이 아직 완료되지 않았어요. 잠시 후 다시 시도해 주세요.');return true}if(p?.ownerUid&&auth?.currentUser&&p.ownerUid!==auth.currentUser.uid){alert('이 계정은 다른 기기에 연결되어 있습니다.');return true}if(p?.moderation?.status==='banned'){alert('이 계정은 운영 정책에 따라 이용이 정지되었습니다. 사유: '+(p.moderation.reason||'관리자 제재'));return true}return false}
 function blockedNickname(name){const n=String(name||'').toLowerCase().replace(/[\s._-]/g,'');return ['시발','씨발','ㅅㅂ','병신','븅신','개새끼','좆','ㅈㄴ','fuck','shit','bitch','nigger'].some(w=>n.includes(w.replace(/[\s._-]/g,'')))}
 function verifyStoredIdentity(){
  if(identityVerified||!me||!auth?.currentUser)return;
  const id=pid(me);
+ if(deletedPlayerIds.has(id)){delete P[id];identityVerified=true;lsSave();if(['menu','rank','prof','adm','champ'].includes(view))render();return}
  P[id]=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0,xp:0};
  if(!P[id].ownerUid)P[id].ownerUid=auth.currentUser.uid;
  identityVerified=true;
@@ -401,8 +481,8 @@ function locSub(v){LD.r[locP()].push(v);bp(500,.08,'square');vLoc()}
 function locBjH(){const h=LD.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?locBjS():vLoc()}
 function locBjS(){const h=LD.hand,v=bv(h.p);LD.hand=null;locSub(v>21?0:(v==21&&h.p.length==2?22:v))}
 function locQuit(){LD=null;go('menu')}
-async function recordChampionshipMatch(names,result){const delta=result===0?[3,-3]:result===1?[-3,3]:[0,0],now=Date.now();for(let i=0;i<2;i++){const id=pid(names[i]),p={...(P[id]||{name:names[i],s:{},wins:0,plays:0,pts:0,t:0,xp:0})};p.name=names[i];p.cp=(Number(p.cp)||0)+delta[i];p.cm=(p.cm||0)+1;p.cmt=(p.cmt||0)+1;p.cpt=(Number(p.cpt)||0)+delta[i];p.xp=(p.xp||0)+20;ensureDaily(p);p.daily.onlineDuels=(p.daily.onlineDuels||0)+1;p.matchLog=[...(p.matchLog||[]),{at:now,opponent:names[1-i],result:result===-1?'draw':result===i?'win':'loss',points:delta[i]}].slice(-50);if(result===-1){p.cd=(p.cd||0)+1;p.cdt=(p.cdt||0)+1}else if(result===i){p.cw=(p.cw||0)+1;p.cwt=(p.cwt||0)+1;p.dw=(p.dw||0)+1}else{p.cl=(p.cl||0)+1;p.clt=(p.clt||0)+1}p.t=now;checkAchievements(p);P[id]=p}const h={time:now,p1:names[0],p2:names[1],result,winner:result<0?'':names[result]};M.history=[...(M.history||[]),h].slice(-200);if(db){try{await Promise.all(names.map(n=>db.collection('players').doc(pid(n)).set(P[pid(n)])));await db.doc('meta/season').set(M)}catch(e){lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(x){}}}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}}
-async function recordLocalMatch(names,result){const now=Date.now();for(let i=0;i<2;i++){const id=pid(names[i]),p={...(P[id]||{name:names[i],s:{},wins:0,plays:0,pts:0,t:0,xp:0})};p.name=names[i];p.localMatches=(p.localMatches||0)+1;p.localLog=[...(p.localLog||[]),{at:now,opponent:names[1-i],result:result===-1?'draw':result===i?'win':'loss'}].slice(-50);p.xp=(p.xp||0)+10;ensureDaily(p);p.daily.duels++;if(result===-1)p.localDraws=(p.localDraws||0)+1;else if(result===i)p.localWins=(p.localWins||0)+1;else p.localLosses=(p.localLosses||0)+1;p.t=now;checkAchievements(p);P[id]=p}if(db){try{await Promise.all(names.map(n=>db.collection('players').doc(pid(n)).set(P[pid(n)])))}catch(e){lsSave()}}else lsSave()}
+async function recordChampionshipMatch(names,result){const delta=result===0?[3,-3]:result===1?[-3,3]:[0,0],now=Date.now();for(let i=0;i<2;i++){const id=pid(names[i]),p={...(P[id]||{name:names[i],s:{},wins:0,plays:0,pts:0,t:0,xp:0})};p.name=names[i];p.cp=(Number(p.cp)||0)+delta[i];p.cm=(p.cm||0)+1;p.cmt=(p.cmt||0)+1;p.cpt=(Number(p.cpt)||0)+delta[i];p.xp=(p.xp||0)+20;ensureDaily(p);p.daily.onlineDuels=(p.daily.onlineDuels||0)+1;p.matchLog=[...(p.matchLog||[]),{at:now,opponent:names[1-i],result:result===-1?'draw':result===i?'win':'loss',points:delta[i]}].slice(-50);if(result===-1){p.cd=(p.cd||0)+1;p.cdt=(p.cdt||0)+1}else if(result===i){p.cw=(p.cw||0)+1;p.cwt=(p.cwt||0)+1;p.dw=(p.dw||0)+1}else{p.cl=(p.cl||0)+1;p.clt=(p.clt||0)+1}p.t=now;checkAchievements(p);P[id]=p}const h={time:now,p1:names[0],p2:names[1],result,winner:result<0?'':names[result]};M.history=[...(M.history||[]),h].slice(-200);if(db){try{await Promise.all(names.map(n=>persistPlayer(pid(n))));await db.doc('meta/season').set(M)}catch(e){console.error('[CHAMPIONSHIP SAVE]',e);lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(x){}}}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}}
+async function recordLocalMatch(names,result){const now=Date.now();for(let i=0;i<2;i++){const id=pid(names[i]),p={...(P[id]||{name:names[i],s:{},wins:0,plays:0,pts:0,t:0,xp:0})};p.name=names[i];p.localMatches=(p.localMatches||0)+1;p.localLog=[...(p.localLog||[]),{at:now,opponent:names[1-i],result:result===-1?'draw':result===i?'win':'loss'}].slice(-50);p.xp=(p.xp||0)+10;ensureDaily(p);p.daily.duels++;if(result===-1)p.localDraws=(p.localDraws||0)+1;else if(result===i)p.localWins=(p.localWins||0)+1;else p.localLosses=(p.localLosses||0)+1;p.t=now;checkAchievements(p);P[id]=p}if(db){try{await Promise.all(names.map(n=>persistPlayer(pid(n))))}catch(e){console.error('[LOCAL DUEL SAVE]',e);lsSave()}}else lsSave()}
 
 function vLoc(){const hd=`<div class=bar><button class=lk onclick="locQuit()">← 나가기</button><span>👥 LOCAL DUEL</span></div>`;
 if(!LD){A.innerHTML=hd+`<h2>LOCAL DUEL · BOOTH MATCH</h2><div class=card><div class=sub>FRIENDLY MATCH · NO RANKING POINTS</div><div class=mut>LOCAL DUEL은 같은 기기에서 즐기는 친선 대결이에요. 여기서 얻는 승패는 챔피언십 점수에 반영되지 않습니다.</div><div class=mut>한 기기에서 두 참가자가 번갈아 플레이해요. 한 매치는 최대 5라운드이며, 먼저 3라운드를 이기면 매치 승리!</div></div><div class=card><div class=sub>PLAYERS</div><input id=n1 maxlength=10 placeholder="1P 닉네임" value="${esc(me)}"><input id=n2 maxlength=10 placeholder="2P 닉네임"><p id=lm class=mut></p><div class=sub>게임 선택</div>${gpick('locGo')}<button class=btn alt onclick="go('champ')">🏆 ROYAL CHAMPIONSHIP 랭킹 보기</button></div>`;return}
@@ -440,9 +520,10 @@ function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join
 function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
 function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
 function renameUI(){A.innerHTML=bar()+`<div class=card><div class=sub>NEW NICKNAME</div><input id=nn maxlength=10 value="${esc(me)}"><button class=btn onclick="renameDo()">바꾸기</button><p id=m class=mut>점수와 기록은 그대로 유지돼요.</p></div>`}
-async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
-const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}
-if(db){try{await db.collection('players').doc(n).set(p);if(n!=o)await db.collection('players').doc(o).delete()}catch(e){}}else lsSave();go('menu')}
+async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(deletedPlayerIds.has(n)){if($('#m'))$('#m').textContent='삭제된 기록이 있는 닉네임은 다시 사용할 수 없어요.';return}if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
+const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;
+try{if(db){await persistPlayer(n);if(n!=o)await markPlayerDeleted(o)}else if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}lsSave();go('menu')}catch(e){alert('닉네임 변경 실패: '+(e.message||e));}
+}
 const slp=f=>{const s=new Set(f).size;return s==1?[100,85,90,75,75][f[0]]:s==2?50:20};
 const dg=()=>DG[dq.game]||DG.dice;
 const DG={
@@ -459,7 +540,7 @@ async function duelJoin(){if(accountBlocked())return;const code=$('#dc').value.t
 dq={code,role:'g',game:s.data().game||'dice',mid:0,sw:{w:0,l:0},mine:{name:me,mid:0,rolls:[]},opp:s.data()};try{await db.doc(dp('g')).set(dq.mine)}catch(e){}dsub();vDuel()}
 async function duelRoll(){if(accountBlocked())return;if(dq.game=='slot')return slotModal(duelSub);if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}return duelSub(dg().roll())}
 async function duelSub(v){const a=JSON.stringify(v);bp(500,.08,'square');dq.mine={...dq.mine,name:me,game:dq.game,mid:dq.mid,rolls:[...dq.mine.rolls,a]};vDuel();try{await db.doc(dp(dq.role)).set(dq.mine)}catch(e){}}
-async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await db.collection('players').doc(id).set(P[id])}catch(e){}}
+async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await persistPlayer(id)}catch(e){console.error('[DUEL WIN SAVE]',e)}}
 function duelLeave(){if(dq){(dq.u||[]).forEach(u=>u());db.doc(dp(dq.role)).delete().catch(()=>{})}dq=null;go('menu')}
 function dres(){const a=dq.mine.rolls,b=(dq.opp&&(dq.opp.mid||0)==dq.mid&&dq.opp.rolls)||[],n=Math.min(a.length,b.length);let w=0,l=0;const rows=[];for(let i=0;i<n;i++){const p=JSON.parse(a[i]),q=JSON.parse(b[i]),c=cmp(dg().sc(p),dg().sc(q));rows.push([p,q,Math.sign(c)]);if(c>0)w++;if(c<0)l++}return{rows,w,l,n,done:w>=3||l>=3||n>=5}}
 function vDuel(){if(firebaseError){A.innerHTML=bar()+'<div class="card c">⚠️ Firebase 연결 오류<div class=mut>'+esc(firebaseError)+'</div><div class=mut>Firebase Authentication의 익명 로그인과 Firestore 보안 규칙을 확인해 주세요.</div></div>';return}if(!db){A.innerHTML=bar()+'<div class="card c">⚔️ 온라인 연결이 필요해요.<div class=mut>Firebase 설정 또는 인터넷 연결을 확인해 주세요.</div></div>';return}
@@ -468,7 +549,8 @@ const r=dres(),a=dq.mine.rolls,on=dq.opp&&dq.opp.name,f=dg().show;let end='';
 if(r.done){const res=r.w>r.l?1:r.w<r.l?-1:0,points=res>0?3:res<0?-3:0;end=`<div class=huge>${res>0?'WIN':res<0?'LOSE':'DRAW'}</div><div class=champTop><div class=sub>ROYAL CHAMPIONSHIP POINTS</div><div class=champPts>${pointText(points)}점</div><div class=mut>이번 ONLINE DUEL 결과 · 시즌 점수에 반영</div></div><div class=sub>다음 게임을 골라 시리즈를 이어가세요</div><div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="duelNext('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div>`;if(!dq.fin){dq.fin=1;if(res>0)dq.sw.w++;if(res<0)dq.sw.l++;fan(res>0);fx(res>0?100:0,res>0);if(dq.role==='h'){const hostResult=res>0?0:res<0?1:-1;recordChampionshipMatch([dq.mine.name,dq.opp.name],hostResult).then(()=>{if(view==='duel'&&dq&&dq.fin)vDuel()})}}}
 A.innerHTML=bar()+`<div class="card c"><div class=sub>${dg().ic} ${dg().n} · ROOM CODE</div><div class=big>${dq.code}</div><div class=mut>${esc(me)} ⚔️ ${on?esc(dq.opp.name):'상대 대기 중…'} · 시리즈 ${dq.sw.w}:${dq.sw.l}</div><div class=felt>${r.rows.map((x,i)=>`<div class=rw><span class=rk>R${i+1}</span><span class=nm>${f(x[0])} vs ${f(x[1])}</span><b>${x[2]>0?'✅':x[2]<0?'❌':'➖'}</b></div>`).join('')}<div class=sub>${r.w} : ${r.l}</div>${end}${!r.done&&on&&a.length==r.n?(dq.hand?bjUI():'<button class=btn onclick="duelRoll()">'+dg().ic+' GO!</button>'):!r.done&&on?'<div class=mut>상대를 기다리는 중…</div>':''}</div><button class="btn alt" onclick="duelLeave()">나가기</button></div>`}
 let onlinePlayersReady=false,onlineMetaReady=false;
-function migrateOnlineOnlyScores(){if(!onlinePlayersReady||!onlineMetaReady||M.onlineScoringV1)return;for(const id of Object.keys(P)){const p=P[id];if(!p)continue;if(p.matchLog&&p.matchLog.length)p.localLog=[...(p.localLog||[]),...p.matchLog.map(h=>({at:h.at,opponent:h.opponent,result:h.result}))].slice(-50);p.matchLog=[];p.cp=0;p.cm=0;p.cw=0;p.cd=0;p.cl=0;p.cmt=0;p.cpt=0;p.cwt=0;p.cdt=0;p.clt=0;}M.history=[];M.onlineScoringV1=true;if(db){Promise.all(Object.entries(P).map(([id,p])=>db.collection('players').doc(id).set(p))).then(()=>db.doc('meta/season').set(M)).catch(()=>{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}})}else{lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}}}
+let migrationInFlight=false;
+function migrateOnlineOnlyScores(){if(!onlinePlayersReady||!onlineMetaReady||M.onlineScoringV1||migrationInFlight)return;migrationInFlight=true;for(const id of Object.keys(P)){const p=P[id];if(!p)continue;if(p.matchLog&&p.matchLog.length)p.localLog=[...(p.localLog||[]),...p.matchLog.map(h=>({at:h.at,opponent:h.opponent,result:h.result}))].slice(-50);p.matchLog=[];p.cp=0;p.cm=0;p.cw=0;p.cd=0;p.cl=0;p.cmt=0;p.cpt=0;p.cwt=0;p.cdt=0;p.clt=0;}M.history=[];if(db){Promise.all(Object.keys(P).map(id=>persistPlayer(id))).then(()=>db.doc('meta/season').set({...M,onlineScoringV1:true})).then(()=>{M.onlineScoringV1=true;lsSave()}).catch(e=>{console.error('[ONLINE MIGRATION]',e);lsSave()}).finally(()=>{migrationInFlight=false})}else{M.onlineScoringV1=true;lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}migrationInFlight=false}}
 /* ---- Firebase connection ---- */
 const firebaseConfig = {
   apiKey: "AIzaSyBZIoNnf_Yu22gLKJkJyT7AjHnJffkDwHk",
@@ -509,18 +591,8 @@ render();
       if(!s.exists && M.onlineScoringV1) db.doc('meta/season').set(M).catch(firebaseConnectionError);
       if(['menu','rank','prof','adm','champ','tv'].includes(view))render();
     },firebaseConnectionError);
-    db.collection('players').onSnapshot(s=>{
-      // Firestore is authoritative while online. Never recreate documents merely
-      // because they still exist in this browser's older local cache.
-      const remotePlayers={};
-      s.docs.forEach(d=>remotePlayers[d.id]=d.data());
-      P=remotePlayers;
-      onlinePlayersReady=true;
-      migrateOnlineOnlyScores();
-      verifyStoredIdentity();
-      lsSave();
-      if(['menu','rank','prof','adm','tv','champ'].includes(view))render();
-    },firebaseConnectionError);
+    db.collection('meta').where('kind','==','deletedPlayer').onSnapshot(applyDeletedPlayerSnapshot,firebaseConnectionError);
+    db.collection('players').onSnapshot(applyRemotePlayersSnapshot,firebaseConnectionError);
   }catch(e){
     firebaseConnectionError(e);
     db=null;
