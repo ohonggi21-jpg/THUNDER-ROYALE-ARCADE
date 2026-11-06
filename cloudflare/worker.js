@@ -274,7 +274,7 @@ async function adminAction(request, env, action, data) {
     const versioned=withAdminChange(before,after,[field]);
     await firestoreSet(env,token,path,versioned,before);
     await audit(db,uid,action,id,before,versioned,cleanReason(data.reason)||field+" "+delta,{field,delta});
-    return {ok:true,player:after};
+    return {ok:true,player:versioned};
   }
   if(action==="rollback"){
     const auditId=Number(data.auditId);
