@@ -187,6 +187,303 @@ async function audit(db, actor, action, playerId, before, after, note="", detail
     .bind(actor, action, playerId || null, cleanReason(note), before == null ? null : JSON.stringify(before), after == null ? null : JSON.stringify(after), JSON.stringify(details || {}), Date.now()).run();
 }
 
+
+const DUEL_GAMES = new Set(["dice","slot","card","roulette","poker","bj"]);
+const DUEL_TICKET_MAX = 3;
+const DUEL_REFILL_MS = 5 * 60 * 1000;
+
+async function ensureDuelTables(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_wallets (uid TEXT PRIMARY KEY, player_id TEXT NOT NULL, tickets INTEGER NOT NULL DEFAULT 3, refill_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_rooms (code TEXT PRIMARY KEY, game TEXT NOT NULL, host_uid TEXT NOT NULL, host_player_id TEXT NOT NULL, host_name TEXT NOT NULL, guest_uid TEXT, guest_player_id TEXT, guest_name TEXT, created_at INTEGER NOT NULL)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_bets (code TEXT NOT NULL, mid INTEGER NOT NULL, uid TEXT NOT NULL, player_id TEXT NOT NULL, role TEXT NOT NULL, stake INTEGER NOT NULL, game TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending', PRIMARY KEY(code,mid,uid), UNIQUE(code,mid,role))").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_settlements (code TEXT NOT NULL, mid INTEGER NOT NULL, host_result TEXT NOT NULL, host_points INTEGER NOT NULL, guest_points INTEGER NOT NULL, host_stake INTEGER NOT NULL, guest_stake INTEGER NOT NULL, settled_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'pending', PRIMARY KEY(code,mid))").run();
+}
+async function duelIdentity(request,env,data) {
+  const identity=await verifyFirebase(request,env);
+  const playerId=String(data.playerId||"");
+  if(!validId(playerId))throw new Error("플레이어 계정 ID가 올바르지 않습니다.");
+  const doc=await firestoreGet(env,identity.token,"players/"+playerId);
+  if(!doc)throw new Error("플레이어 계정을 찾을 수 없습니다. 게임에 다시 입장해 주세요.");
+  const player=decodeFirestoreDoc(doc);
+  if(player.ownerUid!==identity.uid)throw new Error("이 닉네임은 현재 로그인 계정에 연결되어 있지 않습니다.");
+  if(player.moderation&&player.moderation.status==="banned")throw new Error("이 계정은 온라인 대결 이용이 제한되어 있습니다.");
+  return {...identity,playerId,player};
+}
+function duelWalletView(row,now) {
+  const tickets=Math.max(0,Math.min(DUEL_TICKET_MAX,Number(row.tickets)||0));
+  const refillAt=Number(row.refill_at)||now;
+  return {tickets,maxTickets:DUEL_TICKET_MAX,refillInMs:tickets>=DUEL_TICKET_MAX?0:Math.max(0,refillAt+DUEL_REFILL_MS-now),nextRefillAt:tickets>=DUEL_TICKET_MAX?null:refillAt+DUEL_REFILL_MS};
+}
+async function duelWalletStatus(env,uid,playerId) {
+  const now=Date.now();
+  await env.DB.prepare("INSERT OR IGNORE INTO duel_wallets(uid,player_id,tickets,refill_at,updated_at) VALUES(?,?,3,?,?)").bind(uid,playerId,now,now).run();
+  for(let tries=0;tries<6;tries++){
+    const row=await env.DB.prepare("SELECT uid,player_id,tickets,refill_at FROM duel_wallets WHERE uid=?").bind(uid).first();
+    if(!row)throw new Error("티켓 지갑을 불러오지 못했습니다.");
+    const oldTickets=Number(row.tickets)||0,oldAnchor=Number(row.refill_at)||now;
+    const elapsed=Math.max(0,Math.floor((now-oldAnchor)/DUEL_REFILL_MS));
+    const tickets=Math.min(DUEL_TICKET_MAX,oldTickets+elapsed);
+    let anchor=oldAnchor+elapsed*DUEL_REFILL_MS;
+    if(tickets>=DUEL_TICKET_MAX)anchor=now;
+    if(tickets===oldTickets&&anchor===oldAnchor)return duelWalletView(row,now);
+    const updated=await env.DB.prepare("UPDATE duel_wallets SET tickets=?,refill_at=?,updated_at=?,player_id=? WHERE uid=? AND tickets=? AND refill_at=?")
+      .bind(tickets,anchor,now,playerId,uid,oldTickets,oldAnchor).run();
+    if(Number(updated.meta&&updated.meta.changes)>0)return duelWalletView({tickets,refill_at:anchor},now);
+  }
+  throw new Error("티켓 정보를 동시에 변경 중입니다. 다시 눌러 주세요.");
+}
+async function debitDuelTickets(env,uid,playerId,stake) {
+  if(!Number.isInteger(stake)||stake<1||stake>3)throw new Error("베팅은 티켓 1~3개 중에서 선택해 주세요.");
+  const now=Date.now();
+  await env.DB.prepare("INSERT OR IGNORE INTO duel_wallets(uid,player_id,tickets,refill_at,updated_at) VALUES(?,?,3,?,?)").bind(uid,playerId,now,now).run();
+  for(let tries=0;tries<8;tries++){
+    const row=await env.DB.prepare("SELECT tickets,refill_at FROM duel_wallets WHERE uid=?").bind(uid).first();
+    if(!row)throw new Error("티켓 지갑을 찾을 수 없습니다.");
+    const oldTickets=Number(row.tickets)||0,oldAnchor=Number(row.refill_at)||now;
+    const elapsed=Math.max(0,Math.floor((now-oldAnchor)/DUEL_REFILL_MS));
+    const available=Math.min(DUEL_TICKET_MAX,oldTickets+elapsed);
+    let anchor=oldAnchor+elapsed*DUEL_REFILL_MS;
+    if(available>=DUEL_TICKET_MAX)anchor=now;
+    if(available<stake)throw new Error("티켓이 부족합니다. 현재 "+available+"개이며, 5분마다 1개 충전됩니다.");
+    const updated=await env.DB.prepare("UPDATE duel_wallets SET tickets=?,refill_at=?,updated_at=?,player_id=? WHERE uid=? AND tickets=? AND refill_at=?")
+      .bind(available-stake,anchor,now,playerId,uid,oldTickets,oldAnchor).run();
+    if(Number(updated.meta&&updated.meta.changes)>0)return {tickets:available-stake,refill_at:anchor};
+  }
+  throw new Error("티켓을 차감하는 중 충돌이 발생했습니다. 다시 시도해 주세요.");
+}
+async function creditDuelTickets(env,uid,playerId,amount) {
+  const now=Date.now();
+  await duelWalletStatus(env,uid,playerId);
+  for(let tries=0;tries<8;tries++){
+    const row=await env.DB.prepare("SELECT tickets,refill_at FROM duel_wallets WHERE uid=?").bind(uid).first();
+    if(!row)throw new Error("티켓 지갑을 찾을 수 없습니다.");
+    const oldTickets=Number(row.tickets)||0,oldAnchor=Number(row.refill_at)||now;
+    const elapsed=Math.max(0,Math.floor((now-oldAnchor)/DUEL_REFILL_MS));
+    const current=Math.min(DUEL_TICKET_MAX,oldTickets+elapsed);
+    let anchor=oldAnchor+elapsed*DUEL_REFILL_MS;
+    const next=Math.min(DUEL_TICKET_MAX,current+amount);
+    if(next>=DUEL_TICKET_MAX)anchor=now;
+    const updated=await env.DB.prepare("UPDATE duel_wallets SET tickets=?,refill_at=?,updated_at=?,player_id=? WHERE uid=? AND tickets=? AND refill_at=?")
+      .bind(next,anchor,now,playerId,uid,oldTickets,oldAnchor).run();
+    if(Number(updated.meta&&updated.meta.changes)>0)return {tickets:next,refill_at:anchor};
+  }
+  throw new Error("티켓 반환 처리 중 충돌이 발생했습니다.");
+}
+function duelCode(v){const code=String(v||"");if(!/^\d{4}$/.test(code))throw new Error("방 코드는 숫자 4자리여야 합니다.");return code;}
+function duelStake(v){const n=Number(v);if(!Number.isInteger(n)||n<1||n>3)throw new Error("베팅 티켓은 1~3개여야 합니다.");return n;}
+async function createDuelRoom(request,env,data) {
+  await ensureDuelTables(env);
+  const id=await duelIdentity(request,env,data),code=duelCode(data.code),game=String(data.game||"");
+  if(!DUEL_GAMES.has(game))throw new Error("지원하지 않는 온라인 게임입니다.");
+  const stake=duelStake(data.stake),name=String(id.player.name||data.name||"Player").slice(0,40);
+  const exists=await env.DB.prepare("SELECT code FROM duel_rooms WHERE code=?").bind(code).first();
+  if(exists)throw new Error("방 코드가 중복되었습니다. 새 방을 다시 만들어 주세요.");
+  await debitDuelTickets(env,id.uid,id.playerId,stake);
+  try{
+    await env.DB.prepare("INSERT INTO duel_rooms(code,game,host_uid,host_player_id,host_name,created_at) VALUES(?,?,?,?,?,?)")
+      .bind(code,game,id.uid,id.playerId,name,Date.now()).run();
+    await env.DB.prepare("INSERT INTO duel_bets(code,mid,uid,player_id,role,stake,game,state) VALUES(?,0,?,?, 'h',?,?, 'pending')")
+      .bind(code,id.uid,id.playerId,stake,game).run();
+  }catch(e){
+    await creditDuelTickets(env,id.uid,id.playerId,stake).catch(()=>{});
+    await env.DB.prepare("DELETE FROM duel_rooms WHERE code=? AND host_uid=?").bind(code,id.uid).run().catch(()=>{});
+    throw e;
+  }
+  return {ok:true,code,game,stake,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+}
+async function joinDuelRoom(request,env,data) {
+  await ensureDuelTables(env);
+  const id=await duelIdentity(request,env,data),code=duelCode(data.code),stake=duelStake(data.stake);
+  const room=await env.DB.prepare("SELECT * FROM duel_rooms WHERE code=?").bind(code).first();
+  if(!room)throw new Error("방을 찾을 수 없습니다.");
+  if(room.host_uid===id.uid)throw new Error("자기 방에는 참가할 수 없습니다.");
+  if(room.guest_uid)throw new Error("이미 다른 플레이어가 참가한 방입니다.");
+  await debitDuelTickets(env,id.uid,id.playerId,stake);
+  const name=String(id.player.name||data.name||"Player").slice(0,40);
+  try{
+    const updated=await env.DB.prepare("UPDATE duel_rooms SET guest_uid=?,guest_player_id=?,guest_name=? WHERE code=? AND guest_uid IS NULL")
+      .bind(id.uid,id.playerId,name,code).run();
+    if(Number(updated.meta&&updated.meta.changes)!==1)throw new Error("다른 플레이어가 먼저 참가했습니다. 다른 방을 이용해 주세요.");
+    await env.DB.prepare("INSERT INTO duel_bets(code,mid,uid,player_id,role,stake,game,state) VALUES(?,0,?,?, 'g',?,?, 'pending')")
+      .bind(code,id.uid,id.playerId,stake,room.game).run();
+  }catch(e){
+    await env.DB.prepare("UPDATE duel_rooms SET guest_uid=NULL,guest_player_id=NULL,guest_name=NULL WHERE code=? AND guest_uid=?").bind(code,id.uid).run().catch(()=>{});
+    await creditDuelTickets(env,id.uid,id.playerId,stake).catch(()=>{});
+    throw e;
+  }
+  return {ok:true,code,game:room.game,stake,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+}
+async function reserveDuelBet(request,env,data) {
+  await ensureDuelTables(env);
+  const id=await duelIdentity(request,env,data),code=duelCode(data.code),mid=Number(data.mid),game=String(data.game||"");
+  if(!Number.isSafeInteger(mid)||mid<1)throw new Error("다음 경기 번호가 올바르지 않습니다.");
+  if(!DUEL_GAMES.has(game))throw new Error("지원하지 않는 온라인 게임입니다.");
+  const stake=duelStake(data.stake),room=await env.DB.prepare("SELECT * FROM duel_rooms WHERE code=?").bind(code).first();
+  if(!room)throw new Error("온라인 대결 방을 찾을 수 없습니다.");
+  const role=room.host_uid===id.uid?"h":room.guest_uid===id.uid?"g":null;
+  if(!role)throw new Error("이 대결 방의 참가자가 아닙니다.");
+  if(!room.guest_uid)throw new Error("상대가 참가할 때까지 기다려 주세요.");
+  const existing=await env.DB.prepare("SELECT * FROM duel_bets WHERE code=? AND mid=? AND uid=?").bind(code,mid,id.uid).first();
+  if(existing){
+    if(Number(existing.stake)!==stake)throw new Error("이미 확정한 다음 경기 베팅은 바꿀 수 없습니다.");
+    await env.DB.prepare("UPDATE duel_bets SET game=? WHERE code=? AND mid=? AND uid=? AND state='pending'").bind(game,code,mid,id.uid).run();
+    return {ok:true,code,mid,stake,game,wallet:await duelWalletStatus(env,id.uid,id.playerId),alreadyReserved:true};
+  }
+  const settled=await env.DB.prepare("SELECT state FROM duel_settlements WHERE code=? AND mid=?").bind(code,mid).first();
+  if(settled)throw new Error("이미 종료된 경기입니다.");
+  await debitDuelTickets(env,id.uid,id.playerId,stake);
+  try{
+    await env.DB.prepare("INSERT INTO duel_bets(code,mid,uid,player_id,role,stake,game,state) VALUES(?,?,?,?,?,?,?,'pending')")
+      .bind(code,mid,id.uid,id.playerId,role,stake,game).run();
+  }catch(e){
+    await creditDuelTickets(env,id.uid,id.playerId,stake).catch(()=>{});
+    throw e;
+  }
+  const otherRole=role==="h"?"g":"h";
+  const other=await env.DB.prepare("SELECT stake,game FROM duel_bets WHERE code=? AND mid=? AND role=?").bind(code,mid,otherRole).first();
+  return {ok:true,code,mid,stake,game,ready:!!other,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+}
+async function cancelDuelBet(request,env,data) {
+  await ensureDuelTables(env);
+  const id=await duelIdentity(request,env,data),code=duelCode(data.code),mid=Number(data.mid)||0;
+  const room=await env.DB.prepare("SELECT * FROM duel_rooms WHERE code=?").bind(code).first();
+  if(!room) return {ok:true,cancelled:false};
+  const role=room.host_uid===id.uid?"h":room.guest_uid===id.uid?"g":null;
+  if(!role)throw new Error("이 대결 방의 참가자가 아닙니다.");
+  const otherRole=role==="h"?"g":"h";
+  const other=await env.DB.prepare("SELECT uid FROM duel_bets WHERE code=? AND mid=? AND role=?").bind(code,mid,otherRole).first();
+  if(other)throw new Error("상대 베팅까지 확정되어 티켓을 환불할 수 없습니다.");
+  const own=await env.DB.prepare("SELECT stake FROM duel_bets WHERE code=? AND mid=? AND uid=? AND state='pending'").bind(code,mid,id.uid).first();
+  if(own){
+    await env.DB.prepare("DELETE FROM duel_bets WHERE code=? AND mid=? AND uid=? AND state='pending'").bind(code,mid,id.uid).run();
+    await creditDuelTickets(env,id.uid,id.playerId,Number(own.stake)||0);
+  }
+  if(mid===0&&role==="h"){
+    await env.DB.prepare("DELETE FROM duel_rooms WHERE code=? AND host_uid=?").bind(code,id.uid).run();
+  }else if(mid===0&&role==="g"){
+    await env.DB.prepare("UPDATE duel_rooms SET guest_uid=NULL,guest_player_id=NULL,guest_name=NULL WHERE code=? AND guest_uid=?").bind(code,id.uid).run();
+  }
+  return {ok:true,cancelled:!!own,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+}
+async function syncDuelPlayer(env,token,playerId,uid,opponent,stake,result,delta,settlementId,now) {
+  const path="players/"+playerId;
+  for(let tries=0;tries<4;tries++){
+    const doc=await firestoreGet(env,token,path);
+    if(!doc)throw new Error("정산할 플레이어 문서가 없습니다: "+playerId);
+    const before=decodeFirestoreDoc(doc);
+    if(before.ownerUid!==uid)throw new Error("정산 대상 계정의 소유자가 일치하지 않습니다.");
+    const done=Array.isArray(before.duelSettlementIds)?before.duelSettlementIds:[];
+    if(done.includes(settlementId))return;
+    const p={...before};
+    const deltaPoints=Number(delta)||0;
+    p.cp=(Number(p.cp)||0)+deltaPoints;
+    p.cpt=(Number(p.cpt)||0)+deltaPoints;
+    p.cm=(Number(p.cm)||0)+1;
+    p.cmt=(Number(p.cmt)||0)+1;
+    p.xp=(Number(p.xp)||0)+20;
+    const day=new Date(now+9*60*60*1000).toISOString().slice(0,10);
+    if(!p.daily||p.daily.day!==day)p.daily={day,solo:0,games:[],duels:0,claims:{}};
+    p.daily.onlineDuels=(Number(p.daily.onlineDuels)||0)+1;
+    p.matchLog=[...(Array.isArray(p.matchLog)?p.matchLog:[]),{at:now,opponent,result,points:deltaPoints,stake}].slice(-50);
+    if(result==="draw"){p.cd=(Number(p.cd)||0)+1;p.cdt=(Number(p.cdt)||0)+1;}
+    else if(result==="win"){p.cw=(Number(p.cw)||0)+1;p.cwt=(Number(p.cwt)||0)+1;p.dw=(Number(p.dw)||0)+1;}
+    else{p.cl=(Number(p.cl)||0)+1;p.clt=(Number(p.clt)||0)+1;}
+    p.duelSettlementIds=[...done,settlementId].slice(-120);
+    p.t=now;
+    try{
+      await firestoreSet(env,token,path,p,before,doc.updateTime);
+      return;
+    }catch(e){
+      const msg=String(e&&e.message||e);
+      if(tries===3||!/(409|ABORTED|FAILED_PRECONDITION|conflict|update time)/i.test(msg))throw e;
+    }
+  }
+}
+async function appendDuelSeasonHistory(env,token,entry) {
+  for(let tries=0;tries<4;tries++){
+    const doc=await firestoreGet(env,token,"meta/season");
+    const before=doc?decodeFirestoreDoc(doc):{n:1,hof:[],history:[]};
+    const history=Array.isArray(before.history)?before.history:[];
+    if(history.some(x=>x&&x.id===entry.id))return;
+    const next={...before,history:[...history,entry].slice(-200)};
+    try{await firestoreSet(env,token,"meta/season",next,before,doc&&doc.updateTime);return;}
+    catch(e){const msg=String(e&&e.message||e);if(tries===3||!/(409|ABORTED|FAILED_PRECONDITION|conflict|update time)/i.test(msg))throw e;}
+  }
+}
+async function updateDuelHostDocument(env,token,code,settlement) {
+  for(let tries=0;tries<4;tries++){
+    const path="duels/"+code+"h",doc=await firestoreGet(env,token,path);
+    if(!doc)return;
+    const before=decodeFirestoreDoc(doc),next={...before,settlement};
+    try{await firestoreSet(env,token,path,next,before,doc.updateTime);return;}
+    catch(e){const msg=String(e&&e.message||e);if(tries===3||!/(409|ABORTED|FAILED_PRECONDITION|conflict|update time)/i.test(msg))throw e;}
+  }
+}
+async function settleDuelMatch(request,env,data) {
+  await ensureDuelTables(env);
+  const id=await duelIdentity(request,env,data),code=duelCode(data.code),mid=Number(data.mid);
+  if(!Number.isSafeInteger(mid)||mid<0)throw new Error("경기 번호가 올바르지 않습니다.");
+  const room=await env.DB.prepare("SELECT * FROM duel_rooms WHERE code=?").bind(code).first();
+  if(!room||room.host_uid!==id.uid)throw new Error("경기 결과는 방장만 정산할 수 있습니다.");
+  if(!room.guest_uid)throw new Error("상대가 아직 참가하지 않았습니다.");
+  const hostBet=await env.DB.prepare("SELECT * FROM duel_bets WHERE code=? AND mid=? AND role='h'").bind(code,mid).first();
+  const guestBet=await env.DB.prepare("SELECT * FROM duel_bets WHERE code=? AND mid=? AND role='g'").bind(code,mid).first();
+  if(!hostBet||!guestBet)throw new Error("양쪽 플레이어의 베팅이 확정되지 않았습니다.");
+  const result=String(data.result||"");
+  if(!["h","g","draw"].includes(result))throw new Error("경기 결과 값이 올바르지 않습니다.");
+  const now=Date.now(),hostStake=Number(hostBet.stake),guestStake=Number(guestBet.stake);
+  const hostPoints=result==="h"?3*hostStake:result==="g"?-3*hostStake:0;
+  const guestPoints=result==="g"?3*guestStake:result==="h"?-3*guestStake:0;
+  await env.DB.prepare("INSERT OR IGNORE INTO duel_settlements(code,mid,host_result,host_points,guest_points,host_stake,guest_stake,settled_at,state) VALUES(?,?,?,?,?,?,?,?,'pending')")
+    .bind(code,mid,result,hostPoints,guestPoints,hostStake,guestStake,now).run();
+  const settled=await env.DB.prepare("SELECT * FROM duel_settlements WHERE code=? AND mid=?").bind(code,mid).first();
+  if(!settled)throw new Error("정산 기록을 만들지 못했습니다.");
+  if(settled.host_result!==result)throw new Error("이미 다른 결과로 정산된 경기입니다.");
+  if(settled.state==="pending"){
+    if(result==="draw"){
+      await Promise.all([
+        duelWalletStatus(env,room.host_uid,room.host_player_id),
+        duelWalletStatus(env,room.guest_uid,room.guest_player_id)
+      ]);
+      const t=Date.now();
+      await env.DB.batch([
+        env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=?").bind(hostStake,hostStake,t,t,room.host_uid),
+        env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=?").bind(guestStake,guestStake,t,t,room.guest_uid),
+        env.DB.prepare("UPDATE duel_bets SET state='settled' WHERE code=? AND mid=?").bind(code,mid),
+        env.DB.prepare("UPDATE duel_settlements SET state='settled' WHERE code=? AND mid=? AND state='pending'").bind(code,mid)
+      ]);
+    }else{
+      await env.DB.batch([
+        env.DB.prepare("UPDATE duel_bets SET state='settled' WHERE code=? AND mid=?").bind(code,mid),
+        env.DB.prepare("UPDATE duel_settlements SET state='settled' WHERE code=? AND mid=? AND state='pending'").bind(code,mid)
+      ]);
+    }
+  }
+  const settlementId=code+":"+mid;
+  const hostResult=result==="draw"?"draw":result==="h"?"win":"loss";
+  const guestResult=result==="draw"?"draw":result==="g"?"win":"loss";
+  await syncDuelPlayer(env,id.token,room.host_player_id,room.host_uid,room.guest_name,hostStake,hostResult,Number(settled.host_points),settlementId,Number(settled.settled_at)||now);
+  await syncDuelPlayer(env,id.token,room.guest_player_id,room.guest_uid,room.host_name,guestStake,guestResult,Number(settled.guest_points),settlementId,Number(settled.settled_at)||now);
+  const entry={id:settlementId,time:Number(settled.settled_at)||now,p1:room.host_name,p2:room.guest_name,result:result==="draw"?-1:result==="h"?0:1,winner:result==="draw"?"":result==="h"?room.host_name:room.guest_name,hostStake,guestStake,hostPoints:Number(settled.host_points),guestPoints:Number(settled.guest_points)};
+  await appendDuelSeasonHistory(env,id.token,entry);
+  const clientSettlement={id:settlementId,mid,hostResult:result,hostPoints:Number(settled.host_points),guestPoints:Number(settled.guest_points),hostStake:Number(settled.host_stake),guestStake:Number(settled.guest_stake),settledAt:Number(settled.settled_at)};
+  await updateDuelHostDocument(env,id.token,code,clientSettlement);
+  return {ok:true,settlement:clientSettlement,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+}
+async function duelAction(request,env,action,data) {
+  if(action==="wallet"){
+    await ensureDuelTables(env);
+    const id=await duelIdentity(request,env,data);
+    return {ok:true,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+  }
+  if(action==="create")return createDuelRoom(request,env,data);
+  if(action==="join")return joinDuelRoom(request,env,data);
+  if(action==="reserve")return reserveDuelBet(request,env,data);
+  if(action==="cancel")return cancelDuelBet(request,env,data);
+  if(action==="settle")return settleDuelMatch(request,env,data);
+  throw new Error("지원하지 않는 온라인 대결 작업입니다.");
+}
+
 async function adminAction(request, env, action, data) {
   const identity=await requireAdmin(request,env), uid=identity.uid, token=identity.token, db=env.DB;
   if (action==="check") {
@@ -343,10 +640,16 @@ export default {
     try {
       if (request.method==="GET" && url.pathname==="/health") {
         const row=await env.DB.prepare("SELECT 1 AS ok").first();
-        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"admin-rollback-id-fix-2026-11-07-v3"});
+        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"duel-tickets-wagers-2026-11-07-v4"});
       }
-      if (request.method!=="POST" || !url.pathname.startsWith("/admin/")) return json({error:"Not found"},404);
+      if (request.method!=="POST") return json({error:"Not found"},404);
       const data=await request.json();
+      if(url.pathname.startsWith("/duel/")){
+        const action=url.pathname.slice("/duel/".length);
+        const result=await duelAction(request,env,action,data);
+        return json(result);
+      }
+      if(!url.pathname.startsWith("/admin/")) return json({error:"Not found"},404);
       const action=url.pathname.slice("/admin/".length);
       const result=await adminAction(request,env,action,data);
       return json(result);
