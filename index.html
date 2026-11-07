@@ -649,35 +649,64 @@ async function duelNew(game){
  if(accountBlocked())return;
  if(!db)return alert('Firebase 온라인 연결이 필요해요.');
  const stake=Number($('#ds0')&&$('#ds0').value||1),code=String(1000+Math.floor(Math.random()*9000));
- const mine={name:me,game,mid:0,stake,rolls:[]};
+ const ownerUid=auth&&auth.currentUser&&auth.currentUser.uid;
+ if(!ownerUid)return alert('Firebase 로그인이 아직 준비되지 않았어요.');
+ const hostRef=db.doc('duels/'+code+'h'),guestRef=db.doc('duels/'+code+'g');
+ const mine={name:me,game,mid:0,stake,rolls:[],ownerUid};
+ let claimed=false;
  try{
-  await db.doc('duels/'+code+'g').delete().catch(()=>{});
-  await db.doc('duels/'+code+'h').set(mine);
+  await db.runTransaction(async tx=>{
+   const hs=await tx.get(hostRef),gs=await tx.get(guestRef);
+   if(hs.exists||gs.exists)throw new Error('방 코드가 이미 사용 중입니다. 새 방을 다시 만들어 주세요.');
+   tx.set(hostRef,mine);
+  });
+  claimed=true;
   const r=await cloudflareDuelCall('create',{code,game,stake,playerId:pid(me),name:me});
   duelWalletInfo=r.wallet;duelUiError='';
   dq={code,role:'h',game,mid:0,sw:{w:0,l:0},mine,opp:null};
   dsub();vDuel();
  }catch(e){
-  await db.doc('duels/'+code+'h').delete().catch(()=>{});
+  if(claimed)await db.runTransaction(async tx=>{
+   const hs=await tx.get(hostRef);
+   if(hs.exists&&hs.data().ownerUid===ownerUid)tx.delete(hostRef);
+  }).catch(()=>{});
   alert('방 만들기 실패: '+(e&&e.message?e.message:String(e)));
  }
 }
 async function duelJoin(){
  if(accountBlocked())return;
+ if(!db)return alert('Firebase 온라인 연결이 필요해요.');
  const code=String($('#dc')&&$('#dc').value||'').trim(),stake=Number($('#dsJoin')&&$('#dsJoin').value||1);
- if(!/^\d{4}$/.test(code)){alert('방 코드는 숫자 4자리로 입력해 주세요.');return}
+ if(!/^\\d{4}$/.test(code)){alert('방 코드는 숫자 4자리로 입력해 주세요.');return}
+ const ownerUid=auth&&auth.currentUser&&auth.currentUser.uid;
+ if(!ownerUid)return alert('Firebase 로그인이 아직 준비되지 않았어요.');
+ const hostRef=db.doc('duels/'+code+'h'),guestRef=db.doc('duels/'+code+'g');
+ let claimed=false,joined=false;
  try{
-  const s=await db.doc('duels/'+code+'h').get();
+  const s=await hostRef.get();
   if(!s.exists){$('#dc').value='';$('#dc').placeholder='방을 찾을 수 없어요';return}
   const host=s.data()||{},game=host.game||'dice';
-  const mine={name:me,game,mid:0,rolls:[],joining:true};
-  await db.doc('duels/'+code+'g').set(mine);
+  const mine={name:me,game,mid:0,rolls:[],joining:true,ownerUid};
+  await db.runTransaction(async tx=>{
+   const existing=await tx.get(guestRef);
+   if(existing.exists){
+    const previous=existing.data()||{};
+    if(previous.ownerUid!==ownerUid)throw new Error('이미 다른 플레이어가 참가했거나 사용 중인 방입니다.');
+   }else{
+    tx.set(guestRef,mine);
+    claimed=true;
+   }
+  });
   try{
    const r=await cloudflareDuelCall('join',{code,stake,playerId:pid(me),name:me});
+   joined=true;
    mine.stake=stake;mine.joining=false;duelWalletInfo=r.wallet;duelUiError='';
-   await db.doc('duels/'+code+'g').set(mine);
+   await guestRef.set(mine);
   }catch(e){
-   await db.doc('duels/'+code+'g').delete().catch(()=>{});
+   if(claimed&&!joined)await db.runTransaction(async tx=>{
+    const gs=await tx.get(guestRef);
+    if(gs.exists&&gs.data().ownerUid===ownerUid)tx.delete(guestRef);
+   }).catch(()=>{});
    throw e;
   }
   dq={code,role:'g',game,mid:0,sw:{w:0,l:0},mine,opp:host};
