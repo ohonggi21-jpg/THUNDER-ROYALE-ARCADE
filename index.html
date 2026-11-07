@@ -739,6 +739,7 @@ function vDuel(){
   if(!settlement&&dq.role==='h'&&!dq.settling&&!dq.settleError)duelCommitResult(res>0?'h':res<0?'g':'draw');
   settlement=dq.settlement||(dq.opp&&dq.opp.settlement&&dq.opp.settlement.mid===dq.mid?dq.opp.settlement:null);
   if(settlement){
+   if(dq.role==='g'&&dq.walletSettlementSeen!==settlement.id){dq.walletSettlementSeen=settlement.id;duelWalletRefresh()}
    const ownPoints=dq.role==='h'?settlement.hostPoints:settlement.guestPoints;
    const ownStake=Number(dq.mine.stake)||1,oppStake=Number(dq.opp&&dq.opp.stake)||1;
    const nextGames=Object.entries(DG).map(([k,x])=>'<button class=gc onclick="duelNext(\''+k+'\')" '+(!duelWalletInfo||Number(duelWalletInfo.tickets)<1?'disabled':'')+'><span>'+x.ic+'</span>'+x.n+'</button>').join('');
@@ -765,6 +766,7 @@ function vDuel(){
   '<div class=mut>'+esc(me)+' ⚔️ '+(on?esc(dq.opp.name):'상대 대기 중…')+' · 시리즈 '+dq.sw.w+':'+dq.sw.l+'</div>'+
   '<div class=mut>내 베팅 '+(Number(dq.mine.stake)||0)+'개'+(on?' · 상대 베팅 '+(Number(dq.opp.stake)||0)+'개':'')+'</div>'+
   '<div class=mut>🎟 보유 티켓 '+(duelWalletInfo?Number(duelWalletInfo.tickets)+'/3':'확인 중')+' · '+duelWalletLabel()+'</div>'+
+  '<button class="btn alt" onclick="duelWalletRefresh()" '+(duelWalletBusy?'disabled':'')+'>티켓 새로고침</button>'+
   '<div class=felt>'+rows+'<div class=sub>'+r.w+' : '+r.l+'</div>'+
   (!r.done&&waitText?'<div class=mut>'+waitText+'</div>':'')+action+(r.done?end:'')+
   '</div><button class="btn alt" onclick="duelLeave()">나가기</button></div>';
