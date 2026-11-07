@@ -677,7 +677,7 @@ async function duelJoin(){
  if(accountBlocked())return;
  if(!db)return alert('Firebase 온라인 연결이 필요해요.');
  const code=String($('#dc')&&$('#dc').value||'').trim(),stake=Number($('#dsJoin')&&$('#dsJoin').value||1);
- if(!/^\\d{4}$/.test(code)){alert('방 코드는 숫자 4자리로 입력해 주세요.');return}
+ if(!/^\d{4}$/.test(code)){alert('방 코드는 숫자 4자리로 입력해 주세요.');return}
  const ownerUid=auth&&auth.currentUser&&auth.currentUser.uid;
  if(!ownerUid)return alert('Firebase 로그인이 아직 준비되지 않았어요.');
  const hostRef=db.doc('duels/'+code+'h'),guestRef=db.doc('duels/'+code+'g');
