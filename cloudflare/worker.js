@@ -354,16 +354,22 @@ async function cancelDuelBet(request,env,data) {
   const other=await env.DB.prepare("SELECT uid FROM duel_bets WHERE code=? AND mid=? AND role=?").bind(code,mid,otherRole).first();
   if(other)throw new Error("상대 베팅까지 확정되어 티켓을 환불할 수 없습니다.");
   const own=await env.DB.prepare("SELECT stake FROM duel_bets WHERE code=? AND mid=? AND uid=? AND state='pending'").bind(code,mid,id.uid).first();
+  let cancelled=false;
   if(own){
-    await env.DB.prepare("DELETE FROM duel_bets WHERE code=? AND mid=? AND uid=? AND state='pending'").bind(code,mid,id.uid).run();
-    await creditDuelTickets(env,id.uid,id.playerId,Number(own.stake)||0);
+    await duelWalletStatus(env,id.uid,id.playerId);
+    const t=Date.now(),stake=Number(own.stake)||0;
+    const batch=await env.DB.batch([
+      env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=? AND EXISTS(SELECT 1 FROM duel_bets WHERE code=? AND mid=? AND uid=? AND state='pending')").bind(stake,stake,t,t,id.uid,code,mid,id.uid),
+      env.DB.prepare("DELETE FROM duel_bets WHERE code=? AND mid=? AND uid=? AND state='pending'").bind(code,mid,id.uid)
+    ]);
+    cancelled=Number(batch[0]&&batch[0].meta&&batch[0].meta.changes)>0;
   }
   if(mid===0&&role==="h"){
     await env.DB.prepare("DELETE FROM duel_rooms WHERE code=? AND host_uid=?").bind(code,id.uid).run();
   }else if(mid===0&&role==="g"){
     await env.DB.prepare("UPDATE duel_rooms SET guest_uid=NULL,guest_player_id=NULL,guest_name=NULL WHERE code=? AND guest_uid=?").bind(code,id.uid).run();
   }
-  return {ok:true,cancelled:!!own,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
+  return {ok:true,cancelled,wallet:await duelWalletStatus(env,id.uid,id.playerId)};
 }
 async function syncDuelPlayer(env,token,playerId,uid,opponent,stake,result,delta,settlementId,now) {
   const path="players/"+playerId;
@@ -447,8 +453,8 @@ async function settleDuelMatch(request,env,data) {
       ]);
       const t=Date.now();
       await env.DB.batch([
-        env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=?").bind(hostStake,hostStake,t,t,room.host_uid),
-        env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=?").bind(guestStake,guestStake,t,t,room.guest_uid),
+        env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=? AND EXISTS(SELECT 1 FROM duel_settlements WHERE code=? AND mid=? AND state='pending')").bind(hostStake,hostStake,t,t,room.host_uid,code,mid),
+        env.DB.prepare("UPDATE duel_wallets SET tickets=MIN(3,tickets+?),refill_at=CASE WHEN MIN(3,tickets+?)>=3 THEN ? ELSE refill_at END,updated_at=? WHERE uid=? AND EXISTS(SELECT 1 FROM duel_settlements WHERE code=? AND mid=? AND state='pending')").bind(guestStake,guestStake,t,t,room.guest_uid,code,mid),
         env.DB.prepare("UPDATE duel_bets SET state='settled' WHERE code=? AND mid=?").bind(code,mid),
         env.DB.prepare("UPDATE duel_settlements SET state='settled' WHERE code=? AND mid=? AND state='pending'").bind(code,mid)
       ]);
