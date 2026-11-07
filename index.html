@@ -684,7 +684,13 @@ async function duelJoin(){
   dsub();vDuel();
  }catch(e){alert('참가 실패: '+(e&&e.message?e.message:String(e)))}
 }
-async function duelRoll(){if(accountBlocked())return;if(dq.game=='slot')return slotModal(duelSub);if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}return duelSub(dg().roll())}
+async function duelRoll(){
+ if(accountBlocked())return;
+ if(!dq||!dq.opp||Number(dq.mine.stake)<1||Number(dq.opp.stake)<1||dq.opp.joining){alert('양쪽 플레이어가 티켓 베팅을 확정해야 시작할 수 있어요.');return}
+ if(dq.game=='slot')return slotModal(duelSub);
+ if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}
+ return duelSub(dg().roll())
+}
 async function duelSub(v){const a=JSON.stringify(v);bp(500,.08,'square');dq.mine={...dq.mine,name:me,game:dq.game,mid:dq.mid,rolls:[...dq.mine.rolls,a]};vDuel();try{await db.doc(dp(dq.role)).set(dq.mine)}catch(e){}}
 async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await persistPlayer(id)}catch(e){console.error('[DUEL WIN SAVE]',e)}}
 async function duelLeave(){
