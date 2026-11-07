@@ -551,8 +551,27 @@ let idle=Date.now();['pointerdown','keydown'].forEach(e=>addEventListener(e,()=>
 setInterval(()=>{if(Date.now()-idle>90000&&['loc','rank','prof','adm','champ','ach','daily','history','hall','settings','guide','news'].includes(view)){LD=null;au=0;go('menu')}},5000);
 let pr=0;
 const dtitle=w=>w>=20?'THUNDER GOD':w>=10?'LEGEND':w>=5?'ROYAL':w>=3?'ACE':w>=1?'PLAYER':'ROOKIE';
-function vProf(){const p=P[pid(me)]||{s:{},xp:0},t=total(p),k=champSorted().findIndex(x=>x.name===me),x=xpInfo(p),badges=(p.badges||[]).map(id=>ACH.find(a=>a.id===id)).filter(Boolean);A.innerHTML=bar()+`<div class=\"card c\"><div class=sub>MY PROFILE</div><div class=big>${esc(me)} ${k===0?'🏆':''}</div><div class=ok>${title(t)}</div><div class=champTop><div class=sub>ROYAL LEVEL</div><div class=huge style=\"font-size:48px\">${x.level}</div><div class=levelLine><span>EXPERIENCE</span><b>${x.into} / ${x.next} XP</b></div><div class=xpTrack><i style=\"width:${x.percent}%\"></i></div></div><div class=two><div><div class=sub>SEASON POINTS</div><div class=big>${pointText(p.cp||0)}</div><div class=mut>${p.cw||0}승 · ${p.cd||0}무 · ${p.cl||0}패</div></div><div><div class=sub>CAREER</div><div class=big>${pointText(p.cpt||0)}</div><div class=mut>${p.cmt||0}경기 참가</div></div></div><div class=mut>시즌 ${M.n} · 현재 순위 ${k>=0?k+1+'위':'미참가'}</div></div><div class=card><div class=sub>CAREER STATISTICS</div><div class=two><div>총 플레이 <b>${p.plays||0}</b>회</div><div>승리 <b>${p.wins||0}</b>회</div><div>토너먼트 <b>${p.tournaments||0}</b>회</div><div>획득 업적 <b>${badges.length}/${ACH.length}</b></div></div></div><div class=card><div class=sub>PERSONAL BEST SCORES</div><div class=bars>${G.map(g=>`<div class=br><span style=\"width:120px\">${g.ic} ${g.n}</span><i><u style=\"width:${Math.max(0,Math.min(100,p.s?.[g.id]||0))}%\"></u></i><b>${p.s?.[g.id]||0}</b></div>`).join('')}</div><div class=mut>6종 최고 점수 합계: ${t}/600</div></div><div class=card><div class=sub>RECENT BADGES</div><div class=badges>${badges.length?badges.slice(-8).map(a=>`<span class=\"bd on\">${a.ic} ${a.name}</span>`).join(''):'<span class=mut>아직 획득한 업적이 없어요.</span>'}</div><button class=lk onclick=\"go('ach')\">업적 전체 보기 →</button></div><button class=btn alt onclick=\"go('champ')\">🏆 ROYAL CHAMPIONSHIP</button>`}function dnext(){const c=[dq.mine&&dq.mine.next,dq.opp&&dq.opp.next].filter(x=>x&&x.id>dq.mid).sort((a,b)=>b.id-a.id)[0];if(!c)return;dq.mid=c.id;dq.game=c.game;dq.fin=0;dq.hand=null;dq.mine={...dq.mine,game:c.game,mid:c.id,rolls:[]};db.doc(dp(dq.role)).set(dq.mine).catch(()=>{})}
-function duelNext(game){dq.mine={...dq.mine,next:{id:Date.now(),game}};db.doc(dp(dq.role)).set(dq.mine).catch(()=>{});dnext();vDuel()}
+function vProf(){const p=P[pid(me)]||{s:{},xp:0},t=total(p),k=champSorted().findIndex(x=>x.name===me),x=xpInfo(p),badges=(p.badges||[]).map(id=>ACH.find(a=>a.id===id)).filter(Boolean);A.innerHTML=bar()+`<div class=\"card c\"><div class=sub>MY PROFILE</div><div class=big>${esc(me)} ${k===0?'🏆':''}</div><div class=ok>${title(t)}</div><div class=champTop><div class=sub>ROYAL LEVEL</div><div class=huge style=\"font-size:48px\">${x.level}</div><div class=levelLine><span>EXPERIENCE</span><b>${x.into} / ${x.next} XP</b></div><div class=xpTrack><i style=\"width:${x.percent}%\"></i></div></div><div class=two><div><div class=sub>SEASON POINTS</div><div class=big>${pointText(p.cp||0)}</div><div class=mut>${p.cw||0}승 · ${p.cd||0}무 · ${p.cl||0}패</div></div><div><div class=sub>CAREER</div><div class=big>${pointText(p.cpt||0)}</div><div class=mut>${p.cmt||0}경기 참가</div></div></div><div class=mut>시즌 ${M.n} · 현재 순위 ${k>=0?k+1+'위':'미참가'}</div></div><div class=card><div class=sub>CAREER STATISTICS</div><div class=two><div>총 플레이 <b>${p.plays||0}</b>회</div><div>승리 <b>${p.wins||0}</b>회</div><div>토너먼트 <b>${p.tournaments||0}</b>회</div><div>획득 업적 <b>${badges.length}/${ACH.length}</b></div></div></div><div class=card><div class=sub>PERSONAL BEST SCORES</div><div class=bars>${G.map(g=>`<div class=br><span style=\"width:120px\">${g.ic} ${g.n}</span><i><u style=\"width:${Math.max(0,Math.min(100,p.s?.[g.id]||0))}%\"></u></i><b>${p.s?.[g.id]||0}</b></div>`).join('')}</div><div class=mut>6종 최고 점수 합계: ${t}/600</div></div><div class=card><div class=sub>RECENT BADGES</div><div class=badges>${badges.length?badges.slice(-8).map(a=>`<span class=\"bd on\">${a.ic} ${a.name}</span>`).join(''):'<span class=mut>아직 획득한 업적이 없어요.</span>'}</div><button class=lk onclick=\"go('ach')\">업적 전체 보기 →</button></div><button class=btn alt onclick=\"go('champ')\">🏆 ROYAL CHAMPIONSHIP</button>`}function dnext(){
+ if(!dq||!dq.mine||!dq.opp)return;
+ const a=dq.mine.next,b=dq.opp.next;
+ if(!a||!b||a.id!==b.id||a.id<=dq.mid||a.game!==b.game)return;
+ const nextId=a.id,nextGame=a.game;
+ dq.mid=nextId;dq.game=nextGame;dq.fin=0;dq.hand=null;dq.settlement=null;dq.settling=false;dq.settleError='';
+ dq.mine={...dq.mine,game:nextGame,mid:nextId,stake:Number(a.stake)||1,rolls:[],next:null,settlement:null};
+ db.doc(dp(dq.role)).set(dq.mine).catch(()=>{});
+}
+async function duelNext(game){
+ if(!dq||!dq.fin)return;
+ const mid=(Number(dq.mid)||0)+1;
+ const stake=dq.mine.next&&dq.mine.next.id===mid?Number(dq.mine.next.stake)||1:Number($('#dsNext')&&$('#dsNext').value||1);
+ try{
+  const r=await cloudflareDuelCall('reserve',{code:dq.code,mid,game,stake,playerId:pid(me)});
+  duelWalletInfo=r.wallet;duelUiError='';
+  dq.mine={...dq.mine,next:{id:mid,game,stake}};
+  await db.doc(dp(dq.role)).set(dq.mine);
+  dnext();vDuel();
+ }catch(e){alert('다음 경기 베팅 실패: '+(e&&e.message?e.message:String(e)))}
+}
 function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join('')}</div><div class=sub>YOU ${bv(h.p)}</div><div class=two><button class=btn onclick="bjH()">HIT</button><button class=btn onclick="bjS()">STAND</button></div>`}
 function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
 function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
@@ -571,14 +590,114 @@ roulette:{n:'ROULETTE',ic:'🎡',roll:()=>Math.floor(Math.random()*37),sc:v=>[v]
 poker:{n:'POKER',ic:'♠️',roll:()=>deck().slice(0,5),sc:v=>ev(v).t,show:v=>PN[ev(v).k]},
 bj:{n:'BLACKJACK',ic:'🎴',roll:()=>0,sc:v=>[v],show:v=>v==0?'BUST':v==22?'BJ!':v}};
 const dp=r=>`duels/${dq.code}${r}`;
+
+let duelWalletInfo=null,duelWalletBusy=false,duelWalletAttempted=false,duelUiError='';
+async function cloudflareDuelCall(action,data={}){
+ if(!auth||!auth.currentUser)throw new Error('Firebase 로그인이 아직 준비되지 않았어요.');
+ const idToken=await auth.currentUser.getIdToken(true);
+ const response=await fetch('https://thunder-royale-api.ohonggi21.workers.dev/duel/'+encodeURIComponent(action),{
+  method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},
+  body:JSON.stringify(data)
+ });
+ const raw=await response.text();let result={};
+ try{result=JSON.parse(raw)}catch(e){throw new Error('Cloudflare 응답을 읽을 수 없어요. HTTP '+response.status)}
+ if(!response.ok||result.ok===false)throw new Error(result.error||('온라인 대결 요청 실패 · HTTP '+response.status));
+ return result;
+}
+async function duelWalletRefresh(){
+ if(duelWalletBusy||!me)return;
+ duelWalletBusy=true;duelWalletAttempted=true;
+ try{
+  const r=await cloudflareDuelCall('wallet',{playerId:pid(me)});
+  duelWalletInfo=r.wallet;duelUiError='';
+ }catch(e){duelUiError=e&&e.message?e.message:String(e)}
+ finally{duelWalletBusy=false;if(view==='duel')vDuel()}
+}
+function duelWalletLabel(){
+ if(duelWalletBusy&&!duelWalletInfo)return '티켓 확인 중…';
+ if(!duelWalletInfo)return '티켓 정보를 불러오지 못했어요';
+ const n=Number(duelWalletInfo.tickets)||0;
+ if(n>=3)return '충전 완료 · 최대 3개';
+ const ms=Math.max(0,Number(duelWalletInfo.refillInMs)||0),sec=Math.ceil(ms/1000);
+ return '다음 티켓 충전까지 '+Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');
+}
+function duelStakeOptions(){
+ const count=duelWalletInfo?Number(duelWalletInfo.tickets)||0:0;
+ return [1,2,3].map(n=>'<option value="'+n+'" '+(n>count?'disabled':'')+'>'+n+'개'+(n>count?' · 티켓 부족':'')+'</option>').join('');
+}
+async function duelSettleRetry(){
+ if(!dq||dq.role!=='h'||!dq.fin)return;
+ const r=dres(),result=r.w>r.l?'h':r.w<r.l?'g':'draw';
+ await duelCommitResult(result);
+}
+async function duelCommitResult(result){
+ if(!dq||dq.role!=='h'||dq.settling)return;
+ dq.settling=true;dq.settleError='';vDuel();
+ try{
+  const r=await cloudflareDuelCall('settle',{code:dq.code,mid:dq.mid,result,playerId:pid(me)});
+  if(dq){dq.settlement=r.settlement;dq.settling=false;duelWalletInfo=r.wallet;duelUiError='';vDuel()}
+ }catch(e){
+  if(dq){dq.settling=false;dq.settleError=e&&e.message?e.message:String(e);vDuel()}
+ }
+}
+
 function dsub(){dq.u=['h','g'].map(r=>db.doc(dp(r)).onSnapshot(s=>{const d=s.exists?s.data():null;if(r==dq.role){if(d&&((d.mid||0)>=dq.mid||(d.next&&d.next.id>dq.mid)))dq.mine=d}else dq.opp=d;dnext();if(view=='duel'&&dq)vDuel()},()=>{}))}
-async function duelNew(game){if(accountBlocked())return;const code=String(1000+Math.floor(Math.random()*9000));dq={code,role:'h',game,mid:0,sw:{w:0,l:0},mine:{name:me,game,mid:0,rolls:[]},opp:null};try{await db.doc(dp('g')).delete()}catch(e){}try{await db.doc(dp('h')).set(dq.mine)}catch(e){}dsub();vDuel()}
-async function duelJoin(){if(accountBlocked())return;const code=$('#dc').value.trim();if(code.length!=4)return;let s;try{s=await db.doc(`duels/${code}h`).get()}catch(e){}if(!s||!s.exists){$('#dc').value='';$('#dc').placeholder='방을 찾을 수 없어요';return}
-dq={code,role:'g',game:s.data().game||'dice',mid:0,sw:{w:0,l:0},mine:{name:me,mid:0,rolls:[]},opp:s.data()};try{await db.doc(dp('g')).set(dq.mine)}catch(e){}dsub();vDuel()}
+
+async function duelNew(game){
+ if(accountBlocked())return;
+ if(!db)return alert('Firebase 온라인 연결이 필요해요.');
+ const stake=Number($('#ds0')&&$('#ds0').value||1),code=String(1000+Math.floor(Math.random()*9000));
+ const mine={name:me,game,mid:0,stake,rolls:[]};
+ try{
+  await db.doc('duels/'+code+'g').delete().catch(()=>{});
+  await db.doc('duels/'+code+'h').set(mine);
+  const r=await cloudflareDuelCall('create',{code,game,stake,playerId:pid(me),name:me});
+  duelWalletInfo=r.wallet;duelUiError='';
+  dq={code,role:'h',game,mid:0,sw:{w:0,l:0},mine,opp:null};
+  dsub();vDuel();
+ }catch(e){
+  await db.doc('duels/'+code+'h').delete().catch(()=>{});
+  alert('방 만들기 실패: '+(e&&e.message?e.message:String(e)));
+ }
+}
+async function duelJoin(){
+ if(accountBlocked())return;
+ const code=String($('#dc')&&$('#dc').value||'').trim(),stake=Number($('#dsJoin')&&$('#dsJoin').value||1);
+ if(!/^\d{4}$/.test(code)){alert('방 코드는 숫자 4자리로 입력해 주세요.');return}
+ try{
+  const s=await db.doc('duels/'+code+'h').get();
+  if(!s.exists){$('#dc').value='';$('#dc').placeholder='방을 찾을 수 없어요';return}
+  const host=s.data()||{},game=host.game||'dice';
+  const mine={name:me,game,mid:0,rolls:[],joining:true};
+  await db.doc('duels/'+code+'g').set(mine);
+  try{
+   const r=await cloudflareDuelCall('join',{code,stake,playerId:pid(me),name:me});
+   mine.stake=stake;mine.joining=false;duelWalletInfo=r.wallet;duelUiError='';
+   await db.doc('duels/'+code+'g').set(mine);
+  }catch(e){
+   await db.doc('duels/'+code+'g').delete().catch(()=>{});
+   throw e;
+  }
+  dq={code,role:'g',game,mid:0,sw:{w:0,l:0},mine,opp:host};
+  dsub();vDuel();
+ }catch(e){alert('참가 실패: '+(e&&e.message?e.message:String(e)))}
+}
 async function duelRoll(){if(accountBlocked())return;if(dq.game=='slot')return slotModal(duelSub);if(dq.game=='bj'){dq.hand={d:deck(),p:[]};dq.hand.p.push(dq.hand.d.pop(),dq.hand.d.pop());return bv(dq.hand.p)==21?bjS():vDuel()}return duelSub(dg().roll())}
 async function duelSub(v){const a=JSON.stringify(v);bp(500,.08,'square');dq.mine={...dq.mine,name:me,game:dq.game,mid:dq.mid,rolls:[...dq.mine.rolls,a]};vDuel();try{await db.doc(dp(dq.role)).set(dq.mine)}catch(e){}}
 async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await persistPlayer(id)}catch(e){console.error('[DUEL WIN SAVE]',e)}}
-function duelLeave(){if(dq){(dq.u||[]).forEach(u=>u());db.doc(dp(dq.role)).delete().catch(()=>{})}dq=null;go('menu')}
+async function duelLeave(){
+ if(dq){
+  const code=dq.code,mid=Number(dq.mid)||0,opp=dq.opp;
+  try{
+   const pendingNext=dq.mine&&dq.mine.next&&(!opp||!opp.next);
+   const waiting=(!opp||!Number(opp.stake)||opp.joining);
+   if(waiting||pendingNext)await cloudflareDuelCall('cancel',{code,mid:pendingNext?mid+1:mid,playerId:pid(me)});
+  }catch(e){console.warn('[DUEL CANCEL]',e)}
+  (dq.u||[]).forEach(u=>u());
+  await db.doc(dp(dq.role)).delete().catch(()=>{});
+ }
+ dq=null;duelUiError='';go('menu');
+}
 function dres(){const a=dq.mine.rolls,b=(dq.opp&&(dq.opp.mid||0)==dq.mid&&dq.opp.rolls)||[],n=Math.min(a.length,b.length);let w=0,l=0;const rows=[];for(let i=0;i<n;i++){const p=JSON.parse(a[i]),q=JSON.parse(b[i]),c=cmp(dg().sc(p),dg().sc(q));rows.push([p,q,Math.sign(c)]);if(c>0)w++;if(c<0)l++}return{rows,w,l,n,done:w>=3||l>=3||n>=5}}
 function vDuel(){if(firebaseError){A.innerHTML=bar()+'<div class="card c">⚠️ Firebase 연결 오류<div class=mut>'+esc(firebaseError)+'</div><div class=mut>Firebase Authentication의 익명 로그인과 Firestore 보안 규칙을 확인해 주세요.</div></div>';return}if(!db){A.innerHTML=bar()+'<div class="card c">⚔️ 온라인 연결이 필요해요.<div class=mut>Firebase 설정 또는 인터넷 연결을 확인해 주세요.</div></div>';return}
 if(!dq){A.innerHTML=bar()+`<h2>🌐 ONLINE DUEL</h2><div class="card c"><div class=champTop><div class=sub>ROYAL CHAMPIONSHIP · ONLINE ONLY</div><div class=huge style="font-size:42px">⚔️ LIVE MATCH</div><div class=big>승리 +3점 · 무승부 0점 · 패배 -3점</div><div class=mut>대회 점수는 온라인 듀얼 경기에서만 반영됩니다.</div></div><div class=mut>친구 2명이 각자 기기에서 같은 게임으로 맞붙어요. 먼저 3승하면 한 게임의 승자가 됩니다. 끝나면 다른 게임을 고르며 시리즈를 이어갈 수 있어요.</div><div class=sub>⚡ 새 온라인 대결 만들기 · 게임 선택</div><div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="duelNew('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div><div class=sub style="margin-top:12px">🔑 친구에게 받은 방 코드로 참가</div><input id=dc inputmode=numeric maxlength=4 placeholder="방 코드 4자리"><button class="btn alt" onclick="duelJoin()">참가하기</button></div>`;return}
