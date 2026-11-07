@@ -246,9 +246,11 @@ async function adminAction(request, env, action, data) {
     await audit(db,uid,action,null,before,after,"Firebase 시즌 번호 변경");
     return {ok:true,season,meta:after};
   }
+  // Rollback identifies the target from the audit row, not request.playerId.
   const id=String(data.playerId||"");
-  if(!validId(id))throw new Error("잘못된 계정 ID입니다.");
-  const path="players/"+id,doc=await firestoreGet(env,token,path);
+  if(action!=="rollback"&&!validId(id))throw new Error("잘못된 계정 ID입니다.");
+  const path=id ? "players/"+id : "";
+  const doc=id ? await firestoreGet(env,token,path) : null;
   if(action==="deletePlayer"){
     if(!doc){
       if(await isPlayerDeleted(env,token,id))return {ok:true,deleted:id,alreadyDeleted:true};
@@ -294,8 +296,9 @@ async function adminAction(request, env, action, data) {
       await audit(db,uid,"rollback",null,current,restore,"시즌 변경 롤백",{sourceAuditId:auditId});
       return {ok:true,meta:restore};
     }
-    if(!log.player_id)throw new Error("복원 가능한 플레이어 변경 기록이 아닙니다.");
-    const playerId=log.player_id,playerPath="players/"+playerId;
+    const playerId=String(log.player_id||"");
+    if(!validId(playerId))throw new Error("복원 기록의 계정 ID가 올바르지 않습니다.");
+    const playerPath="players/"+playerId;
     const currentDoc=await firestoreGet(env,token,playerPath),current=currentDoc?decodeFirestoreDoc(currentDoc):{};
     if(!currentDoc&&log.action!=="deletePlayer")throw new Error("현재 플레이어 문서가 없어 이 변경은 안전하게 롤백할 수 없습니다.");
     let next;
@@ -340,7 +343,7 @@ export default {
     try {
       if (request.method==="GET" && url.pathname==="/health") {
         const row=await env.DB.prepare("SELECT 1 AS ok").first();
-        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"admin-fix-2026-11-07-v2"});
+        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"admin-rollback-id-fix-2026-11-07-v3"});
       }
       if (request.method!=="POST" || !url.pathname.startsWith("/admin/")) return json({error:"Not found"},404);
       const data=await request.json();
