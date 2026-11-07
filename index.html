@@ -554,8 +554,10 @@ const dtitle=w=>w>=20?'THUNDER GOD':w>=10?'LEGEND':w>=5?'ROYAL':w>=3?'ACE':w>=1?
 function vProf(){const p=P[pid(me)]||{s:{},xp:0},t=total(p),k=champSorted().findIndex(x=>x.name===me),x=xpInfo(p),badges=(p.badges||[]).map(id=>ACH.find(a=>a.id===id)).filter(Boolean);A.innerHTML=bar()+`<div class=\"card c\"><div class=sub>MY PROFILE</div><div class=big>${esc(me)} ${k===0?'🏆':''}</div><div class=ok>${title(t)}</div><div class=champTop><div class=sub>ROYAL LEVEL</div><div class=huge style=\"font-size:48px\">${x.level}</div><div class=levelLine><span>EXPERIENCE</span><b>${x.into} / ${x.next} XP</b></div><div class=xpTrack><i style=\"width:${x.percent}%\"></i></div></div><div class=two><div><div class=sub>SEASON POINTS</div><div class=big>${pointText(p.cp||0)}</div><div class=mut>${p.cw||0}승 · ${p.cd||0}무 · ${p.cl||0}패</div></div><div><div class=sub>CAREER</div><div class=big>${pointText(p.cpt||0)}</div><div class=mut>${p.cmt||0}경기 참가</div></div></div><div class=mut>시즌 ${M.n} · 현재 순위 ${k>=0?k+1+'위':'미참가'}</div></div><div class=card><div class=sub>CAREER STATISTICS</div><div class=two><div>총 플레이 <b>${p.plays||0}</b>회</div><div>승리 <b>${p.wins||0}</b>회</div><div>토너먼트 <b>${p.tournaments||0}</b>회</div><div>획득 업적 <b>${badges.length}/${ACH.length}</b></div></div></div><div class=card><div class=sub>PERSONAL BEST SCORES</div><div class=bars>${G.map(g=>`<div class=br><span style=\"width:120px\">${g.ic} ${g.n}</span><i><u style=\"width:${Math.max(0,Math.min(100,p.s?.[g.id]||0))}%\"></u></i><b>${p.s?.[g.id]||0}</b></div>`).join('')}</div><div class=mut>6종 최고 점수 합계: ${t}/600</div></div><div class=card><div class=sub>RECENT BADGES</div><div class=badges>${badges.length?badges.slice(-8).map(a=>`<span class=\"bd on\">${a.ic} ${a.name}</span>`).join(''):'<span class=mut>아직 획득한 업적이 없어요.</span>'}</div><button class=lk onclick=\"go('ach')\">업적 전체 보기 →</button></div><button class=btn alt onclick=\"go('champ')\">🏆 ROYAL CHAMPIONSHIP</button>`}function dnext(){
  if(!dq||!dq.mine||!dq.opp)return;
  const a=dq.mine.next,b=dq.opp.next;
- if(!a||!b||a.id!==b.id||a.id<=dq.mid||a.game!==b.game)return;
- const nextId=a.id,nextGame=a.game;
+ let nextId=0,nextGame='';
+ if(a&&b&&a.id===b.id&&a.id>dq.mid&&a.game===b.game){nextId=a.id;nextGame=a.game}
+ else if(a&&a.id>dq.mid&&Number(dq.opp.mid)===Number(a.id)&&dq.opp.game===a.game){nextId=a.id;nextGame=a.game}
+ if(!nextId)return;
  dq.mid=nextId;dq.game=nextGame;dq.fin=0;dq.hand=null;dq.settlement=null;dq.settling=false;dq.settleError='';
  dq.mine={...dq.mine,game:nextGame,mid:nextId,stake:Number(a.stake)||1,rolls:[],next:null,settlement:null};
  db.doc(dp(dq.role)).set(dq.mine).catch(()=>{});
@@ -699,11 +701,68 @@ async function duelLeave(){
  dq=null;duelUiError='';go('menu');
 }
 function dres(){const a=dq.mine.rolls,b=(dq.opp&&(dq.opp.mid||0)==dq.mid&&dq.opp.rolls)||[],n=Math.min(a.length,b.length);let w=0,l=0;const rows=[];for(let i=0;i<n;i++){const p=JSON.parse(a[i]),q=JSON.parse(b[i]),c=cmp(dg().sc(p),dg().sc(q));rows.push([p,q,Math.sign(c)]);if(c>0)w++;if(c<0)l++}return{rows,w,l,n,done:w>=3||l>=3||n>=5}}
-function vDuel(){if(firebaseError){A.innerHTML=bar()+'<div class="card c">⚠️ Firebase 연결 오류<div class=mut>'+esc(firebaseError)+'</div><div class=mut>Firebase Authentication의 익명 로그인과 Firestore 보안 규칙을 확인해 주세요.</div></div>';return}if(!db){A.innerHTML=bar()+'<div class="card c">⚔️ 온라인 연결이 필요해요.<div class=mut>Firebase 설정 또는 인터넷 연결을 확인해 주세요.</div></div>';return}
-if(!dq){A.innerHTML=bar()+`<h2>🌐 ONLINE DUEL</h2><div class="card c"><div class=champTop><div class=sub>ROYAL CHAMPIONSHIP · ONLINE ONLY</div><div class=huge style="font-size:42px">⚔️ LIVE MATCH</div><div class=big>승리 +3점 · 무승부 0점 · 패배 -3점</div><div class=mut>대회 점수는 온라인 듀얼 경기에서만 반영됩니다.</div></div><div class=mut>친구 2명이 각자 기기에서 같은 게임으로 맞붙어요. 먼저 3승하면 한 게임의 승자가 됩니다. 끝나면 다른 게임을 고르며 시리즈를 이어갈 수 있어요.</div><div class=sub>⚡ 새 온라인 대결 만들기 · 게임 선택</div><div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="duelNew('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div><div class=sub style="margin-top:12px">🔑 친구에게 받은 방 코드로 참가</div><input id=dc inputmode=numeric maxlength=4 placeholder="방 코드 4자리"><button class="btn alt" onclick="duelJoin()">참가하기</button></div>`;return}
-const r=dres(),a=dq.mine.rolls,on=dq.opp&&dq.opp.name,f=dg().show;let end='';
-if(r.done){const res=r.w>r.l?1:r.w<r.l?-1:0,points=res>0?3:res<0?-3:0;end=`<div class=huge>${res>0?'WIN':res<0?'LOSE':'DRAW'}</div><div class=champTop><div class=sub>ROYAL CHAMPIONSHIP POINTS</div><div class=champPts>${pointText(points)}점</div><div class=mut>이번 ONLINE DUEL 결과 · 시즌 점수에 반영</div></div><div class=sub>다음 게임을 골라 시리즈를 이어가세요</div><div class=grid>${Object.entries(DG).map(([k,x])=>`<button class=gc onclick="duelNext('${k}')"><span>${x.ic}</span>${x.n}</button>`).join('')}</div>`;if(!dq.fin){dq.fin=1;if(res>0)dq.sw.w++;if(res<0)dq.sw.l++;fan(res>0);fx(res>0?100:0,res>0);if(dq.role==='h'){const hostResult=res>0?0:res<0?1:-1;recordChampionshipMatch([dq.mine.name,dq.opp.name],hostResult).then(()=>{if(view==='duel'&&dq&&dq.fin)vDuel()})}}}
-A.innerHTML=bar()+`<div class="card c"><div class=sub>${dg().ic} ${dg().n} · ROOM CODE</div><div class=big>${dq.code}</div><div class=mut>${esc(me)} ⚔️ ${on?esc(dq.opp.name):'상대 대기 중…'} · 시리즈 ${dq.sw.w}:${dq.sw.l}</div><div class=felt>${r.rows.map((x,i)=>`<div class=rw><span class=rk>R${i+1}</span><span class=nm>${f(x[0])} vs ${f(x[1])}</span><b>${x[2]>0?'✅':x[2]<0?'❌':'➖'}</b></div>`).join('')}<div class=sub>${r.w} : ${r.l}</div>${end}${!r.done&&on&&a.length==r.n?(dq.hand?bjUI():'<button class=btn onclick="duelRoll()">'+dg().ic+' GO!</button>'):!r.done&&on?'<div class=mut>상대를 기다리는 중…</div>':''}</div><button class="btn alt" onclick="duelLeave()">나가기</button></div>`}
+function vDuel(){
+ if(firebaseError){A.innerHTML=bar()+'<div class="card c">⚠️ Firebase 연결 오류<div class=mut>'+esc(firebaseError)+'</div><div class=mut>Firebase Authentication의 익명 로그인과 Firestore 보안 규칙을 확인해 주세요.</div></div>';return}
+ if(!db){A.innerHTML=bar()+'<div class="card c">⚔️ 온라인 연결이 필요해요.<div class=mut>Firebase 설정 또는 인터넷 연결을 확인해 주세요.</div></div>';return}
+ if(!dq){
+  if(!duelWalletAttempted&&!duelWalletBusy)duelWalletRefresh();
+  const count=duelWalletInfo?Number(duelWalletInfo.tickets)||0:0;
+  const games=Object.entries(DG).map(([k,x])=>'<button class=gc onclick="duelNew(\''+k+'\')" '+(count<1?'disabled':'')+'><span>'+x.ic+'</span>'+x.n+'</button>').join('');
+  A.innerHTML=bar()+'<h2>🌐 ONLINE DUEL</h2>'+
+   '<div class="card c"><div class=champTop><div class=sub>ROYAL CHAMPIONSHIP · ONLINE ONLY</div><div class=huge style="font-size:42px">⚔️ LIVE MATCH</div><div class=big>내 베팅 × 3점 · 승리 보상</div><div class=mut>두 플레이어가 각자 베팅한 티켓 수에 따라 점수가 계산됩니다.</div></div>'+
+   '<div class=card><div class=big>🎟 '+(duelWalletInfo?count+'/3':'--/3')+' 티켓</div><div class=mut>'+duelWalletLabel()+'</div>'+
+   '<button class="btn alt" onclick="duelWalletRefresh()" '+(duelWalletBusy?'disabled':'')+'>티켓 새로고침</button>'+
+   (duelUiError?'<div class=mut>'+esc(duelUiError)+'</div>':'')+
+   '<div class=sub>이번 경기에서 내가 걸 티켓</div><select id=ds0 style="width:100%;padding:12px;border-radius:10px;background:var(--bg);color:var(--tx);border:1px solid var(--ln)">'+duelStakeOptions()+'</select></div>'+
+   '<div class=mut>각자 1~3개를 따로 베팅합니다. 티켓은 경기마다 차감되고, 5분마다 1개 충전됩니다. 최대 3개까지 보유할 수 있어요.</div>'+
+   '<div class=sub>⚡ 새 온라인 대결 만들기 · 게임 선택</div><div class=grid>'+games+'</div>'+
+   '<div class=sub style="margin-top:12px">🔑 친구에게 받은 방 코드로 참가</div><input id=dc inputmode=numeric maxlength=4 placeholder="방 코드 4자리">'+
+   '<div class=sub>참가할 때 내가 걸 티켓</div><select id=dsJoin style="width:100%;padding:12px;border-radius:10px;background:var(--bg);color:var(--tx);border:1px solid var(--ln)">'+duelStakeOptions()+'</select>'+
+   '<button class="btn alt" onclick="duelJoin()" '+(count<1?'disabled':'')+'>참가하기</button></div>';
+  return;
+ }
+ const r=dres(),a=dq.mine.rolls,on=dq.opp&&dq.opp.name,f=dg().show;
+ let end='',settlement=dq.settlement||(dq.opp&&dq.opp.settlement&&dq.opp.settlement.mid===dq.mid?dq.opp.settlement:null);
+ if(r.done){
+  const res=r.w>r.l?1:r.w<r.l?-1:0;
+  if(!dq.fin){
+   dq.fin=1;if(res>0)dq.sw.w++;if(res<0)dq.sw.l++;
+   fan(res>0);fx(res>0?100:0,res>0);
+   if(dq.role==='h')duelCommitResult(res>0?'h':res<0?'g':'draw');
+  }
+  if(!settlement&&dq.role==='h'&&!dq.settling&&!dq.settleError)duelCommitResult(res>0?'h':res<0?'g':'draw');
+  settlement=dq.settlement||(dq.opp&&dq.opp.settlement&&dq.opp.settlement.mid===dq.mid?dq.opp.settlement:null);
+  if(settlement){
+   const ownPoints=dq.role==='h'?settlement.hostPoints:settlement.guestPoints;
+   const ownStake=Number(dq.mine.stake)||1,oppStake=Number(dq.opp&&dq.opp.stake)||1;
+   const nextGames=Object.entries(DG).map(([k,x])=>'<button class=gc onclick="duelNext(\''+k+'\')" '+(!duelWalletInfo||Number(duelWalletInfo.tickets)<1?'disabled':'')+'><span>'+x.ic+'</span>'+x.n+'</button>').join('');
+   const mismatch=dq.mine.next&&dq.opp&&dq.opp.next&&dq.mine.next.game!==dq.opp.next.game;
+   end='<div class=huge>'+(ownPoints>0?'WIN':ownPoints<0?'LOSE':'DRAW')+'</div>'+
+    '<div class=champTop><div class=sub>ROYAL CHAMPIONSHIP POINTS</div><div class=champPts>'+pointText(ownPoints)+'점</div>'+
+    '<div class=mut>내 베팅 '+ownStake+'개 · 상대 베팅 '+oppStake+'개 · 점수는 각자 베팅 × 3</div>'+
+    (res===0?'<div class=mut>무승부: 양쪽 티켓 반환</div>':'')+'</div>'+
+    '<div class=sub>다음 경기 베팅 티켓 선택</div>'+
+    '<select id=dsNext style="width:100%;padding:12px;border-radius:10px;background:var(--bg);color:var(--tx);border:1px solid var(--ln)">'+duelStakeOptions()+'</select>'+
+    '<div class=mut>'+(dq.mine.next?'내 다음 베팅 확정 · 상대 선택 대기 중':'각자 다음 게임과 베팅을 선택하면 경기가 시작됩니다.')+
+    (mismatch?'<br>두 플레이어가 같은 게임을 선택해야 해요. 같은 게임을 다시 선택해 주세요.':'')+'</div>'+
+    '<div class=grid>'+nextGames+'</div>';
+  }else{
+   end='<div class=big>정산 처리 중…</div><div class=mut>서버에서 티켓과 대회 점수를 확인하고 있어요.</div>'+
+    (dq.settleError?'<div class=mut>'+esc(dq.settleError)+'</div><button class=btn onclick="duelSettleRetry()">정산 다시 시도</button>':'');
+  }
+ }
+ const ready=!!(on&&Number(dq.mine.stake)>=1&&Number(dq.opp.stake)>=1&&!dq.opp.joining);
+ const rows=r.rows.map((x,i)=>'<div class=rw><span class=rk>R'+(i+1)+'</span><span class=nm>'+f(x[0])+' vs '+f(x[1])+'</span><b>'+(x[2]>0?'✅':x[2]<0?'❌':'➖')+'</b></div>').join('');
+ const waitText=!ready?(!on?'상대가 참가할 때까지 기다리는 중…':'양쪽 플레이어의 베팅이 확정되면 경기가 시작됩니다.'):a.length===r.n?'상대를 기다리는 중…':'';
+ const action=!r.done&&ready&&a.length===r.n?(dq.hand?bjUI():'<button class=btn onclick="duelRoll()">'+dg().ic+' GO!</button>'):'';
+ A.innerHTML=bar()+'<div class="card c"><div class=sub>'+dg().ic+' '+dg().n+' · ROOM CODE</div><div class=big>'+dq.code+'</div>'+
+  '<div class=mut>'+esc(me)+' ⚔️ '+(on?esc(dq.opp.name):'상대 대기 중…')+' · 시리즈 '+dq.sw.w+':'+dq.sw.l+'</div>'+
+  '<div class=mut>내 베팅 '+(Number(dq.mine.stake)||0)+'개'+(on?' · 상대 베팅 '+(Number(dq.opp.stake)||0)+'개':'')+'</div>'+
+  '<div class=mut>🎟 보유 티켓 '+(duelWalletInfo?Number(duelWalletInfo.tickets)+'/3':'확인 중')+' · '+duelWalletLabel()+'</div>'+
+  '<div class=felt>'+rows+'<div class=sub>'+r.w+' : '+r.l+'</div>'+
+  (!r.done&&waitText?'<div class=mut>'+waitText+'</div>':'')+action+(r.done?end:'')+
+  '</div><button class="btn alt" onclick="duelLeave()">나가기</button></div>';
+}
 let onlinePlayersReady=false,onlineMetaReady=false;
 let migrationInFlight=false;
 function migrateOnlineOnlyScores(){if(!onlinePlayersReady||!onlineMetaReady||M.onlineScoringV1||migrationInFlight)return;migrationInFlight=true;for(const id of Object.keys(P)){const p=P[id];if(!p)continue;if(p.matchLog&&p.matchLog.length)p.localLog=[...(p.localLog||[]),...p.matchLog.map(h=>({at:h.at,opponent:h.opponent,result:h.result}))].slice(-50);p.matchLog=[];p.cp=0;p.cm=0;p.cw=0;p.cd=0;p.cl=0;p.cmt=0;p.cpt=0;p.cwt=0;p.cdt=0;p.clt=0;}M.history=[];if(db){Promise.all(Object.keys(P).map(id=>persistPlayer(id))).then(()=>markOnlineScoringMigrated()).then(()=>{M.onlineScoringV1=true;lsSave()}).catch(e=>{console.error('[ONLINE MIGRATION]',e);lsSave()}).finally(()=>{migrationInFlight=false})}else{M.onlineScoringV1=true;lsSave();try{localStorage.setItem('trc_meta',JSON.stringify(M))}catch(e){}migrationInFlight=false}}
