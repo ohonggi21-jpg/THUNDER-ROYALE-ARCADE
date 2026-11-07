@@ -133,6 +133,12 @@ let view='menu',mode='free',gid='',tour=null,g={},P={},db=null,auth=null,authRea
 try{me=localStorage.getItem('trc_me')||''}catch(e){}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pid=n=>[...n.trim().toLowerCase()].map(c=>c.codePointAt(0).toString(36)).join('_');
+const nicknameKey=n=>String(n||'').normalize('NFKC').toLowerCase().replace(/[\\s._-]/g,'');
+function nicknameConflict(name,excludeId=''){
+ const key=nicknameKey(name);
+ if(!key)return null;
+ return Object.entries(P).find(([id,p])=>id!==excludeId&&p&&nicknameKey(p.name||'')===key)||null;
+}
 const total=p=>G.reduce((s,x)=>s+((p&&p.s&&p.s[x.id])||0),0);
 const played=p=>G.filter(x=>p&&p.s&&p.s[x.id]!=null).length;
 const title=t=>TT.find(x=>t>=x[0])[1];
@@ -322,6 +328,8 @@ async function login(){
  const id=pid(v);
  if(!deletedPlayersReady||!onlinePlayersReady){alert('서버 계정 정보를 확인 중이에요. 잠시 후 다시 시도해 주세요.');return}
  if(deletedPlayerIds.has(id)){alert('삭제된 계정이에요. 다른 닉네임으로 입장해 주세요.');return}
+ const conflict=nicknameConflict(v,id);
+ if(conflict){alert('이 닉네임은 이미 사용 중이에요. 띄어쓰기·대소문자·기호를 바꿔도 같은 닉네임으로 처리됩니다.');return}
  try{
   const existing=P[id];
   if(existing?.ownerUid&&existing.ownerUid!==auth.currentUser.uid){alert('이 닉네임은 다른 Firebase 계정에 연결되어 있어요.');return}
@@ -549,7 +557,7 @@ function bjUI(){const h=dq.hand;return `<div class=hand>${h.p.map(c=>cd(c)).join
 function bjH(){const h=dq.hand;h.p.push(h.d.pop());bp(520,.06);bv(h.p)>21?bjS():vDuel()}
 function bjS(){const h=dq.hand,v=bv(h.p);dq.hand=null;duelSub(v>21?0:(v==21&&h.p.length==2?22:v))}
 function renameUI(){A.innerHTML=bar()+`<div class=card><div class=sub>NEW NICKNAME</div><input id=nn maxlength=10 value="${esc(me)}"><button class=btn onclick="renameDo()">바꾸기</button><p id=m class=mut>점수와 기록은 그대로 유지돼요.</p></div>`}
-async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(deletedPlayerIds.has(n)){if($('#m'))$('#m').textContent='삭제된 기록이 있는 닉네임은 다시 사용할 수 없어요.';return}if(P[n]&&n!=o){$('#m').textContent='이미 사용 중인 닉네임이에요';return}
+async function renameDo(){if(accountBlocked())return;const v=$('#nn').value.trim(),o=pid(me),n=pid(v);if(!v||(n==o&&v==me))return go('menu');if(deletedPlayerIds.has(n)){if($('#m'))$('#m').textContent='삭제된 기록이 있는 닉네임은 다시 사용할 수 없어요.';return}if(nicknameConflict(v,o)|| (P[n]&&n!=o)){if($('#m'))$('#m').textContent='이미 사용 중인 닉네임이에요. 띄어쓰기·대소문자·기호를 바꿔도 같은 닉네임으로 처리됩니다.';return}
 const p={...(P[o]||{s:{},wins:0,plays:0,pts:0,t:0}),name:v};P[n]=p;
 try{if(db){await persistPlayer(n);if(n!=o)await markPlayerDeleted(o)}else if(n!=o)delete P[o];me=v;try{localStorage.setItem('trc_me',v)}catch(e){}lsSave();go('menu')}catch(e){alert('닉네임 변경 실패: '+(e.message||e));}
 }
