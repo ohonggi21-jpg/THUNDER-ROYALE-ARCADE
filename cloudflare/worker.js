@@ -304,6 +304,8 @@ async function joinDuelRoom(request,env,data) {
   const room=await env.DB.prepare("SELECT * FROM duel_rooms WHERE code=?").bind(code).first();
   if(!room)throw new Error("방을 찾을 수 없습니다.");
   if(room.host_uid===id.uid)throw new Error("자기 방에는 참가할 수 없습니다.");
+  const hostBet=await env.DB.prepare("SELECT uid FROM duel_bets WHERE code=? AND mid=0 AND role='h'").bind(code).first();
+  if(!hostBet)throw new Error("방이 아직 준비 중입니다. 잠시 후 다시 시도해 주세요.");
   if(room.guest_uid){
     if(room.guest_uid===id.uid&&room.guest_player_id===id.playerId){
       const existing=await env.DB.prepare("SELECT stake FROM duel_bets WHERE code=? AND mid=0 AND uid=? AND role='g'").bind(code,id.uid).first();
