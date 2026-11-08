@@ -195,13 +195,16 @@ const DUEL_GAMES = new Set(["dice","slot","card","roulette","poker","bj"]);
 const DUEL_TICKET_MAX = 3;
 const DUEL_REFILL_MS = 5 * 60 * 1000;
 const DUEL_DISCONNECT_TIMEOUT_MS = 60 * 1000;
+let duelTablesReady = false;
 
 async function ensureDuelTables(env) {
+  if(duelTablesReady)return;
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_wallets (uid TEXT PRIMARY KEY, player_id TEXT NOT NULL, tickets INTEGER NOT NULL DEFAULT 3, refill_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_rooms (code TEXT PRIMARY KEY, game TEXT NOT NULL, host_uid TEXT NOT NULL, host_player_id TEXT NOT NULL, host_name TEXT NOT NULL, guest_uid TEXT, guest_player_id TEXT, guest_name TEXT, created_at INTEGER NOT NULL)").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_bets (code TEXT NOT NULL, mid INTEGER NOT NULL, uid TEXT NOT NULL, player_id TEXT NOT NULL, role TEXT NOT NULL, stake INTEGER NOT NULL, game TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending', PRIMARY KEY(code,mid,uid), UNIQUE(code,mid,role))").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_settlements (code TEXT NOT NULL, mid INTEGER NOT NULL, host_result TEXT NOT NULL, host_points INTEGER NOT NULL, guest_points INTEGER NOT NULL, host_stake INTEGER NOT NULL, guest_stake INTEGER NOT NULL, settled_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'pending', PRIMARY KEY(code,mid))").run();
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS duel_presence (code TEXT NOT NULL, uid TEXT NOT NULL, player_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', last_seen INTEGER NOT NULL, PRIMARY KEY(code,uid))").run();
+  duelTablesReady=true;
 }
 async function duelIdentity(request,env,data) {
   const identity=await verifyFirebase(request,env);
@@ -718,7 +721,7 @@ export default {
     try {
       if (request.method==="GET" && url.pathname==="/health") {
         const row=await env.DB.prepare("SELECT 1 AS ok").first();
-        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"duel-room-race-fix-2026-11-07-v5"});
+        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"duel-forfeit-2026-11-08-v1"});
       }
       if (request.method!=="POST") return json({error:"Not found"},404);
       const data=await request.json();
