@@ -594,9 +594,9 @@ bj:{n:'BLACKJACK',ic:'🎴',roll:()=>0,sc:v=>[v],show:v=>v==0?'BUST':v==22?'BJ!'
 const dp=r=>`duels/${dq.code}${r}`;
 
 let duelWalletInfo=null,duelWalletBusy=false,duelWalletAttempted=false,duelUiError='',duelPresenceInFlight=null;
-async function cloudflareDuelCall(action,data={}){
+async function cloudflareDuelCall(action,data={},forceRefresh=true){
  if(!auth||!auth.currentUser)throw new Error('Firebase 로그인이 아직 준비되지 않았어요.');
- const idToken=await auth.currentUser.getIdToken(true);
+ const idToken=await auth.currentUser.getIdToken(forceRefresh);
  const response=await fetch('https://thunder-royale-api.ohonggi21.workers.dev/duel/'+encodeURIComponent(action),{
   method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},
   body:JSON.stringify(data)
@@ -621,7 +621,7 @@ async function duelPulse(){
  const current=dq;
  const task=(async()=>{
   try{
-   const r=await cloudflareDuelCall("presence",{code:current.code,mid:Number(current.mid)||0,playerId:pid(me)});
+   const r=await cloudflareDuelCall("presence",{code:current.code,mid:Number(current.mid)||0,playerId:pid(me)},false);
    if(dq!==current||!r.opponentForfeited||!r.settlement)return;
    current.settlement=r.settlement;current.forfeit=true;current.fin=1;
    const points=current.role==="h"?(Number(r.settlement.hostPoints)||0):(Number(r.settlement.guestPoints)||0);
@@ -765,7 +765,7 @@ async function duelLeave(){
    try{await cloudflareDuelCall('cancel',{code,mid:pendingNext?mid+1:mid,playerId:pid(me)})}
    catch(e){console.warn('[DUEL CANCEL]',e)}
   }else{
-   try{await cloudflareDuelCall('presence',{code,mid,playerId:pid(me),left:true})}
+   try{await cloudflareDuelCall('presence',{code,mid,playerId:pid(me),left:true},false)}
    catch(e){console.warn('[DUEL LEAVE PRESENCE]',e)}
   }
   (current.u||[]).forEach(u=>u());
