@@ -78,7 +78,10 @@ async function verifyFirebase(request, env) {
 }
 async function requireAdmin(request, env) {
   const identity = await verifyFirebase(request, env);
-  const allowed = String(env.ADMIN_UIDS || "").split(",").map(x => x.trim()).filter(Boolean);
+  const allowed = [env.ADMIN_UIDS, env.ADMIN_UIDS_EXTRA]
+    .flatMap(value => String(value || "").split(","))
+    .map(x => x.trim())
+    .filter(Boolean);
   if (!allowed.includes(identity.uid)) throw new Error("관리자 권한이 없습니다.");
   return identity;
 }
