@@ -507,8 +507,6 @@ async function settleDuelMatch(request,env,data) {
   const hostBet=await env.DB.prepare("SELECT * FROM duel_bets WHERE code=? AND mid=? AND role='h'").bind(code,mid).first();
   const guestBet=await env.DB.prepare("SELECT * FROM duel_bets WHERE code=? AND mid=? AND role='g'").bind(code,mid).first();
   if(!hostBet||!guestBet)throw new Error("양쪽 플레이어의 베팅이 확정되지 않았습니다.");
-  const result=String(data.result||"");
-  if(!["h","g","draw"].includes(result))throw new Error("경기 결과 값이 올바르지 않습니다.");
   const now=Date.now(),hostStake=Number(hostBet.stake),guestStake=Number(guestBet.stake);
   const hostPoints=result==="h"?3*hostStake:result==="g"?-3*hostStake:0;
   const guestPoints=result==="g"?3*guestStake:result==="h"?-3*guestStake:0;
