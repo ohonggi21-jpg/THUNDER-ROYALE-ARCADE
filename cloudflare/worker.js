@@ -1,3 +1,4 @@
+// @ts-nocheck
 const cors = {
   "Access-Control-Allow-Origin": "https://ohonggi21-jpg.github.io",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
@@ -721,7 +722,7 @@ export default {
     try {
       if (request.method==="GET" && url.pathname==="/health") {
         const row=await env.DB.prepare("SELECT 1 AS ok").first();
-        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"duel-forfeit-2026-11-08-v1"});
+        return json({ok:!!row,service:"thunder-royale-api",database:"connected",version:"duel-forfeit-2026-11-08-v2"});
       }
       if (request.method!=="POST") return json({error:"Not found"},404);
       const data=await request.json();
