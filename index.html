@@ -593,7 +593,7 @@ poker:{n:'POKER',ic:'♠️',roll:()=>deck().slice(0,5),sc:v=>ev(v).t,show:v=>PN
 bj:{n:'BLACKJACK',ic:'🎴',roll:()=>0,sc:v=>[v],show:v=>v==0?'BUST':v==22?'BJ!':v}};
 const dp=r=>`duels/${dq.code}${r}`;
 
-let duelWalletInfo=null,duelWalletBusy=false,duelWalletAttempted=false,duelUiError='';
+let duelWalletInfo=null,duelWalletBusy=false,duelWalletAttempted=false,duelUiError='',duelPresenceInFlight=null;
 async function cloudflareDuelCall(action,data={}){
  if(!auth||!auth.currentUser)throw new Error('Firebase 로그인이 아직 준비되지 않았어요.');
  const idToken=await auth.currentUser.getIdToken(true);
@@ -615,6 +615,28 @@ async function duelWalletRefresh(){
  }catch(e){duelUiError=e&&e.message?e.message:String(e)}
  finally{duelWalletBusy=false;if(view==='duel')vDuel()}
 }
+async function duelPulse(){
+ if(!dq||dq.forfeit||!auth||!auth.currentUser)return;
+ if(duelPresenceInFlight)return;
+ const current=dq;
+ const task=(async()=>{
+  try{
+   const r=await cloudflareDuelCall("presence",{code:current.code,mid:Number(current.mid)||0,playerId:pid(me)});
+   if(dq!==current||!r.opponentForfeited||!r.settlement)return;
+   current.settlement=r.settlement;current.forfeit=true;current.fin=1;
+   const points=current.role==="h"?(Number(r.settlement.hostPoints)||0):(Number(r.settlement.guestPoints)||0);
+   current.sw=current.sw||{w:0,l:0};
+   if(points>0)current.sw.w++;else if(points<0)current.sw.l++;
+   duelWalletInfo=r.wallet||duelWalletInfo;
+   if(current.presenceTimer)clearInterval(current.presenceTimer);
+   if(view==="duel")vDuel();
+  }catch(e){console.warn("[DUEL PRESENCE]",e)}
+ })();
+ duelPresenceInFlight=task;
+ try{await task}finally{if(duelPresenceInFlight===task)duelPresenceInFlight=null}
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)duelPulse()});
+window.addEventListener("focus",()=>duelPulse());
 function duelWalletLabel(){
  if(duelWalletBusy&&!duelWalletInfo)return '티켓 확인 중…';
  if(!duelWalletInfo)return '티켓 정보를 불러오지 못했어요';
@@ -643,7 +665,17 @@ async function duelCommitResult(result){
  }
 }
 
-function dsub(){dq.u=['h','g'].map(r=>db.doc(dp(r)).onSnapshot(s=>{const d=s.exists?s.data():null;if(r==dq.role){if(d&&((d.mid||0)>=dq.mid||(d.next&&d.next.id>dq.mid)))dq.mine=d}else dq.opp=d;dnext();if(view=='duel'&&dq)vDuel()},()=>{}))}
+function dsub(){
+ if(dq.presenceTimer)clearInterval(dq.presenceTimer);
+ dq.u=['h','g'].map(r=>db.doc(dp(r)).onSnapshot(s=>{
+  const d=s.exists?s.data():null;
+  if(r==dq.role){if(d&&((d.mid||0)>=dq.mid||(d.next&&d.next.id>dq.mid)))dq.mine=d}
+  else{dq.opp=d;if(!d)duelPulse()}
+  dnext();if(view=='duel'&&dq)vDuel();
+ },()=>{}));
+ dq.presenceTimer=setInterval(()=>duelPulse(),10000);
+ duelPulse();
+}
 
 async function duelNew(game){
  if(accountBlocked())return;
@@ -724,14 +756,20 @@ async function duelSub(v){const a=JSON.stringify(v);bp(500,.08,'square');dq.mine
 async function duelWin(){const id=pid(me),p=P[id]||{name:me,s:{},wins:0,plays:0,pts:0,t:0};P[id]={...p,dw:(p.dw||0)+1,t:Date.now()};try{await persistPlayer(id)}catch(e){console.error('[DUEL WIN SAVE]',e)}}
 async function duelLeave(){
  if(dq){
-  const code=dq.code,mid=Number(dq.mid)||0,opp=dq.opp;
-  try{
-   const pendingNext=dq.mine&&dq.mine.next&&(!opp||!opp.next);
-   const waiting=(!opp||!Number(opp.stake)||opp.joining);
-   if(waiting||pendingNext)await cloudflareDuelCall('cancel',{code,mid:pendingNext?mid+1:mid,playerId:pid(me)});
-  }catch(e){console.warn('[DUEL CANCEL]',e)}
-  (dq.u||[]).forEach(u=>u());
-  await db.doc(dp(dq.role)).delete().catch(()=>{});
+  const current=dq,code=current.code,mid=Number(current.mid)||0,opp=current.opp;
+  const pendingNext=current.mine&&current.mine.next&&(!opp||!opp.next);
+  const waiting=(!opp||!Number(opp.stake)||opp.joining);
+  if(current.presenceTimer)clearInterval(current.presenceTimer);
+  if(duelPresenceInFlight)await duelPresenceInFlight.catch(()=>{});
+  if(waiting||pendingNext){
+   try{await cloudflareDuelCall('cancel',{code,mid:pendingNext?mid+1:mid,playerId:pid(me)})}
+   catch(e){console.warn('[DUEL CANCEL]',e)}
+  }else{
+   try{await cloudflareDuelCall('presence',{code,mid,playerId:pid(me),left:true})}
+   catch(e){console.warn('[DUEL LEAVE PRESENCE]',e)}
+  }
+  (current.u||[]).forEach(u=>u());
+  await db.doc('duels/'+code+current.role).delete().catch(()=>{});
  }
  dq=null;duelUiError='';go('menu');
 }
@@ -749,7 +787,7 @@ function vDuel(){
    '<button class="btn alt" onclick="duelWalletRefresh()" '+(duelWalletBusy?'disabled':'')+'>티켓 새로고침</button>'+
    (duelUiError?'<div class=mut>'+esc(duelUiError)+'</div>':'')+
    '<div class=sub>이번 경기에서 내가 걸 티켓</div><select id=ds0 style="width:100%;padding:12px;border-radius:10px;background:var(--bg);color:var(--tx);border:1px solid var(--ln)">'+duelStakeOptions()+'</select></div>'+
-   '<div class=mut>각자 1~3개를 따로 베팅합니다. 티켓은 경기마다 차감되고, 5분마다 1개 충전됩니다. 최대 3개까지 보유할 수 있어요.</div>'+
+   '<div class=mut>각자 1~3개를 따로 베팅합니다. 티켓은 경기마다 차감되고, 5분마다 1개 충전됩니다. 최대 3개까지 보유할 수 있어요. 상대가 나가거나 60초 이상 연결이 끊기면 자동 승리로 처리됩니다.</div>'+
    '<div class=sub>⚡ 새 온라인 대결 만들기 · 게임 선택</div><div class=grid>'+games+'</div>'+
    '<div class=sub style="margin-top:12px">🔑 친구에게 받은 방 코드로 참가</div><input id=dc inputmode=numeric maxlength=4 placeholder="방 코드 4자리">'+
    '<div class=sub>참가할 때 내가 걸 티켓</div><select id=dsJoin style="width:100%;padding:12px;border-radius:10px;background:var(--bg);color:var(--tx);border:1px solid var(--ln)">'+duelStakeOptions()+'</select>'+
@@ -758,6 +796,23 @@ function vDuel(){
  }
  const r=dres(),a=dq.mine.rolls,on=dq.opp&&dq.opp.name,f=dg().show;
  let end='',settlement=dq.settlement||(dq.opp&&dq.opp.settlement&&dq.opp.settlement.mid===dq.mid?dq.opp.settlement:null);
+ if(settlement&&settlement.forfeit){
+  const points=dq.role==='h'?Number(settlement.hostPoints)||0:Number(settlement.guestPoints)||0;
+  if(!dq.fin){
+   dq.fin=1;
+   if(points>0)dq.sw.w++;else if(points<0)dq.sw.l++;
+   fan(points>0);fx(points>0?100:0,points>0);
+  }
+  const winner=points>0;
+  A.innerHTML=bar()+'<div class="card c"><div class=sub>⚔️ ONLINE DUEL · ROOM '+dq.code+'</div>'+
+   '<div class=huge>'+(winner?'🏆 WIN':'DEFEAT')+'</div>'+
+   '<div class=big>'+(winner?'상대 탈주로 자동 승리!':'상대 탈주 판정으로 경기 종료')+'</div>'+
+   '<div class=champTop><div class=sub>ROYAL CHAMPIONSHIP POINTS</div><div class=champPts>'+pointText(points)+'점</div>'+
+   '<div class=mut>상대가 나가거나 60초 이상 연결이 끊겨 서버가 자동 정산했습니다.</div></div>'+
+   '<div class=mut>시리즈 '+dq.sw.w+':'+dq.sw.l+' · 이번 대결은 종료됐어요.</div>'+
+   '<button class="btn alt" onclick="duelLeave()">메뉴로 돌아가기</button></div>';
+  return;
+ }
  if(r.done){
   const res=r.w>r.l?1:r.w<r.l?-1:0;
   if(!dq.fin){
